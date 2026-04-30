@@ -218,6 +218,48 @@ body {
   animation: fade-up 0.45s ease forwards;
 }
 
+/* ── Print / PDF ────────────────────────────────────────── */
+.print-only { display: none; }
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  :root {
+    --bg: #ffffff;
+    --card: #f8f8fb;
+    --border: rgba(0, 0, 0, 0.1);
+    --border-strong: rgba(0, 0, 0, 0.18);
+    --text: #0a0a14;
+    --text-muted: #555570;
+    --text-dim: #44445a;
+    --seo: #1a9c72;
+    --ai: #7a3ecf;
+    --purple: #5a42c9;
+  }
+
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  html, body {
+    background: #ffffff !important;
+    background-image: none !important;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .card, .card-sm {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid rgba(0,0,0,0.12) !important;
+  }
+
+  .fade-up { animation: none !important; }
+}
+
 /* ── Mobile tweaks ──────────────────────────────────────── */
 @media (max-width: 640px) {
   .stat-grid {

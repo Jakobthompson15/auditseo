@@ -227,7 +227,7 @@ export default function Home() {
       }}
     >
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+      <div className="no-print" style={{ textAlign: "center", marginBottom: "3rem" }}>
         <div
           style={{
             display: "inline-flex",
@@ -289,17 +289,34 @@ export default function Home() {
         </p>
       </div>
 
+      {/* Print-only report header */}
+      {auditing && (
+        <div className="print-only" style={{ marginBottom: "1.5rem" }}>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Marketing Visibility Audit
+          </p>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.01em" }}>
+            {sanitizeDomain(rawDomain)}
+          </h2>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+            Generated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} · Powered by DataForSEO + Claude
+          </p>
+        </div>
+      )}
+
       {/* Input */}
+      <div className="no-print">
       <DomainInput
         value={rawDomain}
         onChange={setRawDomain}
         onSubmit={handleSubmit}
         disabled={isRunning}
       />
+      </div>
 
       {/* Progress */}
       {auditing && (
-        <div style={{ marginTop: "2.5rem" }}>
+        <div className="no-print" style={{ marginTop: "2.5rem" }}>
           <ProgressTracker
             steps={steps}
             onRetry={failedAtStep ? handleRetry : undefined}
@@ -309,7 +326,7 @@ export default function Home() {
 
       {/* Report */}
       {auditing && (
-        <div style={{ marginTop: "2rem" }}>
+        <div style={{ marginTop: "2rem" }} id="audit-report">
           {/* Score cards */}
           {showScores && (
             <div
@@ -348,11 +365,51 @@ export default function Home() {
           {showAnalysis && (
             <AnalysisCard text={analysis} pills={pills} />
           )}
+
+          {/* PDF download — only shown when full report is ready */}
+          {showAnalysis && !isRunning && (
+            <div
+              className="no-print"
+              style={{ marginTop: "2rem", display: "flex", justifyContent: "center" }}
+            >
+              <button
+                onClick={() => window.print()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.78rem",
+                  letterSpacing: "0.06em",
+                  color: "var(--text)",
+                  background: "var(--card)",
+                  border: "1px solid var(--border-strong)",
+                  borderRadius: 8,
+                  padding: "0.625rem 1.25rem",
+                  cursor: "pointer",
+                  transition: "border-color 0.15s, background 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(124,106,247,0.5)";
+                  (e.currentTarget as HTMLButtonElement).style.background = "var(--card-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-strong)";
+                  (e.currentTarget as HTMLButtonElement).style.background = "var(--card)";
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M7 1v7M4 5l3 3 3-3M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Download PDF
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Footer */}
-      <footer
+      <footer className="no-print"
         style={{
           marginTop: "4rem",
           textAlign: "center",
