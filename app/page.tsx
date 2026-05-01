@@ -381,21 +381,20 @@ export default function Home() {
                   fontFamily: "var(--font-mono)",
                   fontSize: "0.78rem",
                   letterSpacing: "0.06em",
-                  color: "var(--text)",
-                  background: "var(--card)",
-                  border: "1px solid var(--border-strong)",
+                  color: "#fff",
+                  background: "var(--purple)",
+                  border: "1px solid rgba(124,106,247,0.6)",
                   borderRadius: 8,
-                  padding: "0.625rem 1.25rem",
+                  padding: "0.7rem 1.5rem",
                   cursor: "pointer",
-                  transition: "border-color 0.15s, background 0.15s",
+                  transition: "opacity 0.15s",
+                  boxShadow: "0 0 20px rgba(124,106,247,0.3)",
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(124,106,247,0.5)";
-                  (e.currentTarget as HTMLButtonElement).style.background = "var(--card-hover)";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-strong)";
-                  (e.currentTarget as HTMLButtonElement).style.background = "var(--card)";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
