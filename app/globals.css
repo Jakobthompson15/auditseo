@@ -218,6 +218,11 @@ body {
   animation: fade-up 0.45s ease forwards;
 }
 
+/* ── Analysis card ──────────────────────────────────────── */
+.analysis-card {
+  background: linear-gradient(135deg, rgba(124,106,247,0.07) 0%, rgba(17,17,24,1) 60%) !important;
+}
+
 /* ── Print / PDF ────────────────────────────────────────── */
 .print-only { display: none; }
 
@@ -258,6 +263,11 @@ body {
   }
 
   .fade-up { animation: none !important; }
+
+  .analysis-card {
+    background: #f3f0ff !important;
+    border-color: rgba(90, 66, 201, 0.2) !important;
+  }
 }
 
 /* ── Mobile tweaks ──────────────────────────────────────── */
@@ -273,5 +283,9 @@ body {
   .keyword-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .calculator-grid {
+    grid-template-columns: 1fr !important;
   }
 }

@@ -37,10 +37,18 @@ export interface AIKeywordItem {
   ai_search_volume: number;
 }
 
+export interface CompetitorItem {
+  domain: string;
+  organic_count: number;
+  organic_etv: number;
+  rank: number;
+}
+
 export type AuditStep =
   | "rank"
   | "backlinks"
   | "keywords"
+  | "competitors"
   | "ai_metrics"
   | "ai_keywords"
   | "analysis";
@@ -49,6 +57,7 @@ export interface AuditContext {
   rank: RankData;
   backlinks: BacklinkData;
   keywords: KeywordItem[];
+  competitors: CompetitorItem[];
   ai_metrics: AIMetrics;
   ai_keywords: AIKeywordItem[];
   analysis: string;

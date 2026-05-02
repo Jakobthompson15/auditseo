@@ -6,6 +6,7 @@ import type {
   RankData,
   BacklinkData,
   KeywordItem,
+  CompetitorItem,
   AIMetrics,
   AIKeywordItem,
   AuditContext,
@@ -147,6 +148,20 @@ Return ONLY a valid JSON array with up to 8 items (use [] if unavailable):
 No markdown, no explanation — only the JSON array.`;
 }
 
+function competitorsPrompt(domain: string): string {
+  return `Use the DataForSEO MCP tools to get the top 5 organic search competitors for "${domain}".
+Return ONLY a valid JSON array with up to 5 items (use [] if unavailable):
+[
+  {
+    "domain": "<competitor domain>",
+    "organic_count": <number of organic keywords>,
+    "organic_etv": <estimated monthly traffic value USD number>,
+    "rank": <domain authority rank score 0-100 number>
+  }
+]
+No markdown, no explanation — only the JSON array.`;
+}
+
 function aiMetricsPrompt(domain: string): string {
   return `Use the DataForSEO MCP tools to get LLM mention aggregated metrics for "${domain}" across AI platforms.
 Return ONLY a valid JSON object with these exact fields (use 0 for any unavailable value):
@@ -226,6 +241,7 @@ export async function POST(req: NextRequest) {
     "rank",
     "backlinks",
     "keywords",
+    "competitors",
     "ai_metrics",
     "ai_keywords",
     "analysis",
@@ -239,6 +255,7 @@ export async function POST(req: NextRequest) {
       | RankData
       | BacklinkData
       | KeywordItem[]
+      | CompetitorItem[]
       | AIMetrics
       | AIKeywordItem[]
       | string;
@@ -286,6 +303,20 @@ export async function POST(req: NextRequest) {
             rank: Number(k.rank ?? 0),
             search_volume: Number(k.search_volume ?? 0),
             cpc: Number(k.cpc ?? 0),
+          }));
+        break;
+      }
+
+      case "competitors": {
+        const text = await callWithMCP(competitorsPrompt(domain));
+        const raw = safeParseJSON<CompetitorItem[]>(text, []);
+        data = (Array.isArray(raw) ? raw : [])
+          .slice(0, 5)
+          .map((c) => ({
+            domain: String(c.domain ?? ""),
+            organic_count: Number(c.organic_count ?? 0),
+            organic_etv: Number(c.organic_etv ?? 0),
+            rank: Number(c.rank ?? 0),
           }));
         break;
       }

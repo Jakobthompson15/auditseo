@@ -5,6 +5,7 @@ import type {
   AuditContext,
   AuditStep,
   BacklinkData,
+  CompetitorItem,
   KeywordItem,
   AIKeywordItem,
   AIMetrics,
@@ -22,13 +23,16 @@ import ProgressTracker from "@/components/ProgressTracker";
 import ScoreCard from "@/components/ScoreCard";
 import SEOSection from "@/components/SEOSection";
 import KeywordsTable from "@/components/KeywordsTable";
+import CompetitorSection from "@/components/CompetitorSection";
 import AISection from "@/components/AISection";
 import AnalysisCard from "@/components/AnalysisCard";
+import RevenueCalculator from "@/components/RevenueCalculator";
 
 const STEP_LABELS: Record<AuditStep, string> = {
   rank: "Domain rank overview",
   backlinks: "Backlink profile",
   keywords: "Ranked keywords",
+  competitors: "Industry competitors",
   ai_metrics: "AI mention metrics",
   ai_keywords: "AI mention queries",
   analysis: "Generating analysis",
@@ -38,6 +42,7 @@ const ALL_STEPS: AuditStep[] = [
   "rank",
   "backlinks",
   "keywords",
+  "competitors",
   "ai_metrics",
   "ai_keywords",
   "analysis",
@@ -76,6 +81,8 @@ const DEFAULT_AI_METRICS: AIMetrics = {
   question_mentions: 0,
   answer_mentions: 0,
 };
+
+const DEFAULT_COMPETITORS: CompetitorItem[] = [];
 
 export default function Home() {
   const [rawDomain, setRawDomain] = useState("");
@@ -140,6 +147,9 @@ export default function Home() {
               case "keywords":
                 context.keywords = data as KeywordItem[];
                 break;
+              case "competitors":
+                context.competitors = data as CompetitorItem[];
+                break;
               case "ai_metrics":
                 context.ai_metrics = data as AIMetrics;
                 break;
@@ -197,6 +207,7 @@ export default function Home() {
   const rank = auditData.rank ?? DEFAULT_RANK;
   const backlinks = auditData.backlinks ?? DEFAULT_BACKLINKS;
   const keywords = auditData.keywords ?? [];
+  const competitors = auditData.competitors ?? DEFAULT_COMPETITORS;
   const aiMetrics = auditData.ai_metrics ?? DEFAULT_AI_METRICS;
   const aiKeywords = auditData.ai_keywords ?? [];
   const analysis = auditData.analysis ?? "";
@@ -213,6 +224,7 @@ export default function Home() {
   const showScores = !!(auditData.rank && auditData.backlinks);
   const showSEO = !!(auditData.rank && auditData.backlinks);
   const showKeywords = keywords.length > 0;
+  const showCompetitors = competitors.length > 0;
   const showAI = !!(auditData.ai_metrics);
   const showAnalysis = !!analysis;
 
@@ -228,6 +240,37 @@ export default function Home() {
     >
       {/* Header */}
       <div className="no-print" style={{ textAlign: "center", marginBottom: "3rem" }}>
+        {/* Syndicate Marketing branding */}
+        {/* To use real logo: save file to /public/logo.svg and uncomment <img> below */}
+        <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "center", alignItems: "center" }}>
+          {/* <img src="/logo.svg" alt="Syndicate Marketing" style={{ height: 40 }} /> */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.75rem" }}>
+            {/* S icon placeholder */}
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                background: "white",
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 900, fontSize: "1.1rem", color: "#000", letterSpacing: "-0.05em" }}>S</span>
+            </div>
+            <div style={{ textAlign: "left", lineHeight: 1.1 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: "1rem", letterSpacing: "0.2em", color: "#ffffff", textTransform: "uppercase" }}>
+                SYNDICATE
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "0.62rem", letterSpacing: "0.35em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+                MARKETING
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
           style={{
             display: "inline-flex",
@@ -292,14 +335,17 @@ export default function Home() {
       {/* Print-only report header */}
       {auditing && (
         <div className="print-only" style={{ marginBottom: "1.5rem" }}>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--purple)", marginBottom: "0.35rem", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 700 }}>
+            Syndicate Marketing
+          </p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)", marginBottom: "0.5rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Marketing Visibility Audit
           </p>
           <h2 style={{ fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.01em" }}>
             {sanitizeDomain(rawDomain)}
           </h2>
           <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Generated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} · Powered by DataForSEO + Claude
+            Generated {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })} · Prepared by Syndicate Marketing
           </p>
         </div>
       )}
@@ -356,6 +402,16 @@ export default function Home() {
           {/* Keywords */}
           {showKeywords && <KeywordsTable keywords={keywords} />}
 
+          {/* Competitors */}
+          {showCompetitors && (
+            <CompetitorSection
+              competitors={competitors}
+              auditedDomain={sanitizeDomain(rawDomain)}
+              auditedRank={rank}
+              auditedBacklinks={backlinks}
+            />
+          )}
+
           {/* AI section */}
           {showAI && (
             <AISection metrics={aiMetrics} aiKeywords={aiKeywords} />
@@ -364,6 +420,11 @@ export default function Home() {
           {/* Analysis */}
           {showAnalysis && (
             <AnalysisCard text={analysis} pills={pills} />
+          )}
+
+          {/* Revenue calculator — web-only sales tool */}
+          {showAnalysis && !isRunning && (
+            <RevenueCalculator rank={rank} />
           )}
 
           {/* PDF download — only shown when full report is ready */}
@@ -418,7 +479,7 @@ export default function Home() {
           letterSpacing: "0.06em",
         }}
       >
-        Powered by DataForSEO MCP · Claude claude-sonnet-4-20250514
+        Powered by Syndicate Marketing · DataForSEO + Claude
       </footer>
     </main>
   );

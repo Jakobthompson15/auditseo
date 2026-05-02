@@ -8,11 +8,9 @@ interface AnalysisCardProps {
 export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
   return (
     <div
-      className="card fade-up"
+      className="card fade-up analysis-card"
       style={{
         marginTop: "1.5rem",
-        background:
-          "linear-gradient(135deg, rgba(124,106,247,0.07) 0%, rgba(17,17,24,1) 60%)",
         border: "1px solid rgba(124,106,247,0.2)",
       }}
     >
