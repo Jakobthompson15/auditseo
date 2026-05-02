@@ -394,7 +394,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
                 <div
                   style={{
                     marginTop: "0.75rem",
-                    background: "rgba(255,255,255,0.04)",
+                    background: "rgba(0,0,0,0.04)",
                     border: `1px solid ${pkg.color}33`,
                     borderRadius: 6,
                     padding: "0.5rem 0.75rem",

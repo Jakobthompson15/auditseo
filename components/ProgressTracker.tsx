@@ -43,7 +43,7 @@ function StatusIcon({ status }: { status: StepStatus["status"] }) {
         width: 14,
         height: 14,
         borderRadius: "50%",
-        border: "1px solid rgba(255,255,255,0.12)",
+        border: "1px solid var(--border-strong)",
         display: "inline-block",
         flexShrink: 0,
       }}

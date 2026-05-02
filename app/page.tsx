@@ -250,7 +250,7 @@ export default function Home() {
               style={{
                 width: 36,
                 height: 36,
-                background: "white",
+                background: "#111",
                 borderRadius: 6,
                 display: "flex",
                 alignItems: "center",
@@ -258,10 +258,10 @@ export default function Home() {
                 flexShrink: 0,
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 900, fontSize: "1.1rem", color: "#000", letterSpacing: "-0.05em" }}>S</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 900, fontSize: "1.1rem", color: "#fff", letterSpacing: "-0.05em" }}>S</span>
             </div>
             <div style={{ textAlign: "left", lineHeight: 1.1 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: "1rem", letterSpacing: "0.2em", color: "#ffffff", textTransform: "uppercase" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: "1rem", letterSpacing: "0.2em", color: "var(--text)", textTransform: "uppercase" }}>
                 SYNDICATE
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "0.62rem", letterSpacing: "0.35em", color: "var(--text-muted)", textTransform: "uppercase" }}>

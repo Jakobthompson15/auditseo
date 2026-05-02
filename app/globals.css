@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0f;
-  --card: #111118;
-  --card-hover: #16161f;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --text: #e8e8f0;
+  --bg: #f4f4f9;
+  --card: #ffffff;
+  --card-hover: #ededf5;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text: #0d0d1a;
   --text-muted: #6b6b85;
-  --text-dim: #9999b5;
-  --seo: #4febb4;
-  --seo-dim: rgba(79, 235, 180, 0.15);
-  --ai: #b46af7;
-  --ai-dim: rgba(180, 106, 247, 0.15);
-  --purple: #7c6af7;
-  --purple-dim: rgba(124, 106, 247, 0.15);
-  --error: #f74f6e;
-  --error-dim: rgba(247, 79, 110, 0.12);
+  --text-dim: #44445a;
+  --seo: #0d8c63;
+  --seo-dim: rgba(13, 140, 99, 0.1);
+  --ai: #7a3ecf;
+  --ai-dim: rgba(122, 62, 207, 0.1);
+  --purple: #5a42c9;
+  --purple-dim: rgba(90, 66, 201, 0.1);
+  --error: #c9294a;
+  --error-dim: rgba(201, 41, 74, 0.1);
   --font-mono: "DM Mono", monospace;
   --font-body: "DM Sans", sans-serif;
 }
@@ -40,8 +40,8 @@ html {
 body {
   background-color: var(--bg);
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
   background-size: 48px 48px;
   color: var(--text);
   font-family: var(--font-body);
@@ -220,7 +220,7 @@ body {
 
 /* ── Analysis card ──────────────────────────────────────── */
 .analysis-card {
-  background: linear-gradient(135deg, rgba(124,106,247,0.07) 0%, rgba(17,17,24,1) 60%) !important;
+  background: linear-gradient(135deg, rgba(90,66,201,0.07) 0%, rgba(244,244,249,1) 60%) !important;
 }
 
 /* ── Print / PDF ────────────────────────────────────────── */
@@ -229,19 +229,6 @@ body {
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
-
-  :root {
-    --bg: #ffffff;
-    --card: #f8f8fb;
-    --border: rgba(0, 0, 0, 0.1);
-    --border-strong: rgba(0, 0, 0, 0.18);
-    --text: #0a0a14;
-    --text-muted: #555570;
-    --text-dim: #44445a;
-    --seo: #1a9c72;
-    --ai: #7a3ecf;
-    --purple: #5a42c9;
-  }
 
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
@@ -265,7 +252,7 @@ body {
   .fade-up { animation: none !important; }
 
   .analysis-card {
-    background: #f3f0ff !important;
+    background: #eeebff !important;
     border-color: rgba(90, 66, 201, 0.2) !important;
   }
 }

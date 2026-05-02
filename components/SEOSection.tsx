@@ -61,7 +61,7 @@ function DistBar({ label, count, total, color }: DistBarProps) {
           flex: 1,
           height: 6,
           borderRadius: 9999,
-          background: "rgba(255,255,255,0.06)",
+          background: "var(--border)",
           overflow: "hidden",
         }}
       >
@@ -161,7 +161,7 @@ export default function SEOSection({ rank, backlinks }: SEOSectionProps) {
           label="Pos 21–100"
           count={rank.pos_21_100}
           total={totalPositioned}
-          color="rgba(255,255,255,0.15)"
+          color="var(--border-strong)"
         />
       </div>
     </div>
