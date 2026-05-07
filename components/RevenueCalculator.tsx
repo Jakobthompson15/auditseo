@@ -2,15 +2,26 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/audit";
-import type { RankData } from "@/lib/types";
+import type { RankData, KeywordItem } from "@/lib/types";
 
-// floor = minimum new visitors/mo the campaign will generate regardless of current traffic
+// CTR by target ranking position (industry-average organic CTR)
+const CTR: Record<number, number> = {
+  1: 0.276,
+  2: 0.158,
+  3: 0.110,
+  5: 0.063,
+  10: 0.040,
+};
+
+// Plan tiers: Silver ranks #1 for 1 keyword, Gold #1 for top keyword,
+// Platinum #1 for top 3 keywords combined
 const PACKAGES = [
   {
     name: "Silver",
     price: 799,
-    multiplier: 0.20,
-    floor: 150,
+    targetPosition: 3,   // gets to top 3
+    keywordCount: 1,
+    positionLabel: "Top 3",
     color: "#8B9AAD",
     colorDim: "rgba(139,154,173,0.10)",
     featured: false,
@@ -18,8 +29,9 @@ const PACKAGES = [
   {
     name: "Gold",
     price: 1299,
-    multiplier: 0.50,
-    floor: 400,
+    targetPosition: 1,   // gets to #1
+    keywordCount: 1,
+    positionLabel: "#1",
     color: "var(--purple)",
     colorDim: "rgba(31,120,255,0.15)",
     featured: true,
@@ -27,8 +39,9 @@ const PACKAGES = [
   {
     name: "Platinum",
     price: 1999,
-    multiplier: 1.00,
-    floor: 900,
+    targetPosition: 1,   // gets to #1 for top 3 keywords
+    keywordCount: 3,
+    positionLabel: "#1",
     color: "#7DD4FC",
     colorDim: "rgba(125,212,252,0.10)",
     featured: false,
@@ -63,6 +76,7 @@ const INDUSTRY_CVR: Record<string, number> = {
 
 interface RevenueCalculatorProps {
   rank: RankData;
+  keywords?: KeywordItem[];
 }
 
 function fmtMoney(n: number): string {
@@ -71,7 +85,7 @@ function fmtMoney(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-function StatRow({ label, value, highlight }: { label: string; value: string; highlight?: string }) {
+function StatRow({ label, value, highlight, large }: { label: string; value: string; highlight?: string; large?: boolean }) {
   return (
     <div
       style={{
@@ -95,9 +109,9 @@ function StatRow({ label, value, highlight }: { label: string; value: string; hi
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: "0.88rem",
+          fontSize: large ? "1.05rem" : "0.88rem",
           color: highlight ?? "var(--text)",
-          fontWeight: 600,
+          fontWeight: 700,
         }}
       >
         {value}
@@ -106,25 +120,48 @@ function StatRow({ label, value, highlight }: { label: string; value: string; hi
   );
 }
 
-export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
+export default function RevenueCalculator({ rank, keywords = [] }: RevenueCalculatorProps) {
   const [industry, setIndustry] = useState<string>("Local Services");
   const [ticketSize, setTicketSize] = useState<number>(3000);
   const [closeRate, setCloseRate] = useState<number>(20);
   const [selectedPlan, setSelectedPlan] = useState<PlanName>("Gold");
+  const [selectedKwIdx, setSelectedKwIdx] = useState<number>(0);
 
-  const baseline = rank.organic_traffic > 0
-    ? rank.organic_traffic
-    : Math.max(10, rank.organic_count * 3);
+  // Sort keywords by search volume descending — these are the targets
+  const sortedKws = [...keywords].sort((a, b) => b.search_volume - a.search_volume);
+  const hasKeywords = sortedKws.length > 0;
+
   const cvr = INDUSTRY_CVR[industry] ?? 0.02;
   const pkg = PACKAGES.find((p) => p.name === selectedPlan)!;
 
-  const addVisitors = Math.max(Math.round(baseline * pkg.multiplier), pkg.floor);
-  const monthlyLeads = addVisitors * cvr;
+  // Calculate projected visitors based on keyword search volume × CTR for target position
+  function projectVisitors(): number {
+    if (!hasKeywords) {
+      // Fallback when no keyword data: use organic_count as a proxy
+      const base = rank.organic_traffic > 0 ? rank.organic_traffic : Math.max(50, rank.organic_count * 5);
+      return Math.round(base * CTR[pkg.targetPosition]);
+    }
+    const primaryKw = sortedKws[Math.min(selectedKwIdx, sortedKws.length - 1)];
+    if (pkg.keywordCount === 1) {
+      return Math.round(primaryKw.search_volume * CTR[pkg.targetPosition]);
+    }
+    // Platinum: sum top 3 from selected keyword onwards
+    const kws = sortedKws.slice(selectedKwIdx, selectedKwIdx + 3);
+    return kws.reduce((sum, kw) => sum + Math.round(kw.search_volume * CTR[pkg.targetPosition]), 0);
+  }
+
+  const projectedVisitors = projectVisitors();
+  const monthlyLeads = projectedVisitors * cvr;
   const monthlyClients = monthlyLeads * (closeRate / 100);
   const monthlyRevenue = monthlyClients * ticketSize;
   const sixMonthRevenue = monthlyRevenue * 6;
   const sixMonthCost = pkg.price * 6;
   const roi = sixMonthCost > 0 ? sixMonthRevenue / sixMonthCost : 0;
+
+  const primaryKw = hasKeywords ? sortedKws[Math.min(selectedKwIdx, sortedKws.length - 1)] : null;
+  const targetKwsForPlatinum = pkg.keywordCount === 3
+    ? sortedKws.slice(selectedKwIdx, selectedKwIdx + 3)
+    : null;
 
   const inputStyle: React.CSSProperties = {
     background: "var(--card)",
@@ -160,7 +197,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
       <div className="section-header">
         <span className="section-dot" style={{ background: "var(--purple)" }} />
         <span className="section-title" style={{ color: "var(--purple)" }}>
-          Your 6-Month Growth Potential
+          Keyword ROI Projector
         </span>
         <span
           style={{
@@ -174,7 +211,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
             padding: "2px 7px",
           }}
         >
-          ROI Estimator
+          6-Month ROI
         </span>
       </div>
 
@@ -187,10 +224,37 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
           lineHeight: 1.6,
         }}
       >
-        Based on realistic 6-month SEO outcomes for your market. Current organic footprint: ~{fmt(baseline)} visitors/mo. Adjust inputs below to match your business.
+        {hasKeywords
+          ? `Select a keyword below. We project traffic based on ranking ${pkg.positionLabel} for that keyword (${(CTR[pkg.targetPosition] * 100).toFixed(0)}% average click-through rate at that position).`
+          : "Based on your current SEO footprint. Run an audit first to model keyword-specific ROI."}
       </p>
 
-      {/* Inputs */}
+      {/* Keyword selector */}
+      {hasKeywords && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label style={labelStyle}>Target Keyword</label>
+          <select
+            value={selectedKwIdx}
+            onChange={(e) => setSelectedKwIdx(Number(e.target.value))}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            {sortedKws.map((kw, i) => (
+              <option key={`${kw.keyword}-${i}`} value={i}>
+                {kw.keyword} — {fmt(kw.search_volume)}/mo searches
+                {kw.rank > 0 ? ` (currently #${kw.rank})` : ""}
+              </option>
+            ))}
+          </select>
+          {primaryKw && (
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
+              {fmt(primaryKw.search_volume)} monthly searches × {(CTR[pkg.targetPosition] * 100).toFixed(0)}% CTR at {pkg.positionLabel} = <strong style={{ color: "var(--text)" }}>{fmt(pkg.keywordCount === 1 ? projectedVisitors : Math.round(primaryKw.search_volume * CTR[pkg.targetPosition]))} visitors/mo</strong> from this keyword alone
+              {pkg.keywordCount === 3 && targetKwsForPlatinum && ` (+${fmt(projectedVisitors - Math.round(primaryKw.search_volume * CTR[pkg.targetPosition]))} from next 2 keywords)`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Business inputs */}
       <div
         style={{
           display: "grid",
@@ -207,29 +271,14 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
             style={{ ...inputStyle, cursor: "pointer" }}
           >
             {INDUSTRIES.map((ind) => (
-              <option key={ind} value={ind}>
-                {ind}
-              </option>
+              <option key={ind} value={ind}>{ind}</option>
             ))}
           </select>
         </div>
         <div>
           <label style={labelStyle}>Avg. Ticket Size</label>
           <div style={{ position: "relative" }}>
-            <span
-              style={{
-                position: "absolute",
-                left: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.85rem",
-                color: "var(--text-muted)",
-                pointerEvents: "none",
-              }}
-            >
-              $
-            </span>
+            <span style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
             <input
               type="number"
               min={100}
@@ -247,25 +296,10 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
               min={1}
               max={100}
               value={closeRate}
-              onChange={(e) =>
-                setCloseRate(Math.min(100, Math.max(1, Number(e.target.value))))
-              }
+              onChange={(e) => setCloseRate(Math.min(100, Math.max(1, Number(e.target.value))))}
               style={{ ...inputStyle, paddingRight: "1.75rem" }}
             />
-            <span
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.85rem",
-                color: "var(--text-muted)",
-                pointerEvents: "none",
-              }}
-            >
-              %
-            </span>
+            <span style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>%</span>
           </div>
         </div>
       </div>
@@ -299,37 +333,24 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: "0.15rem",
+                gap: "0.1rem",
               }}
             >
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.62rem",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: active ? p.color : "var(--text-muted)",
-                  fontWeight: active ? 700 : 400,
-                }}
-              >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", letterSpacing: "0.12em", textTransform: "uppercase", color: active ? p.color : "var(--text-muted)", fontWeight: active ? 700 : 400 }}>
                 {p.name}
               </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  color: active ? "var(--text)" : "var(--text-muted)",
-                }}
-              >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 700, color: active ? "var(--text)" : "var(--text-muted)" }}>
                 ${p.price.toLocaleString()}/mo
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.58rem", color: active ? p.color : "var(--text-muted)" }}>
+                Rank {p.positionLabel} · {p.keywordCount === 1 ? "1 keyword" : `${p.keywordCount} keywords`}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Stats for selected plan */}
+      {/* Stats */}
       <div
         style={{
           border: `1px solid ${pkg.color}55`,
@@ -339,21 +360,23 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
           marginBottom: "1.25rem",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.62rem",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: pkg.color,
-            marginBottom: "0.75rem",
-            fontWeight: 700,
-          }}
-        >
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", letterSpacing: "0.12em", textTransform: "uppercase", color: pkg.color, marginBottom: "0.75rem", fontWeight: 700 }}>
           {pkg.name} Plan — 6-Month Projection
+          {primaryKw && <span style={{ fontWeight: 400, marginLeft: "0.5rem", opacity: 0.8 }}>· &ldquo;{primaryKw.keyword}&rdquo;</span>}
         </div>
 
-        <StatRow label="Additional Visitors / mo" value={`+${fmt(addVisitors)}`} />
+        {hasKeywords && primaryKw && (
+          <StatRow
+            label={`Keyword search volume / mo`}
+            value={fmt(pkg.keywordCount === 3 && targetKwsForPlatinum
+              ? targetKwsForPlatinum.reduce((s, k) => s + k.search_volume, 0)
+              : primaryKw.search_volume)}
+          />
+        )}
+        <StatRow
+          label={`Projected visitors / mo (rank ${pkg.positionLabel}, ${(CTR[pkg.targetPosition] * 100).toFixed(0)}% CTR)`}
+          value={`+${fmt(projectedVisitors)}`}
+        />
         <StatRow
           label={`Lead Gen Rate (${(cvr * 100).toFixed(1)}% of visitors)`}
           value={monthlyLeads < 1 ? `${monthlyLeads.toFixed(1)} leads/mo` : `${fmt(Math.round(monthlyLeads))} leads/mo`}
@@ -363,15 +386,11 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
           value={monthlyClients < 1 ? `${monthlyClients.toFixed(2)} clients/mo` : `${monthlyClients.toFixed(1)} clients/mo`}
         />
         <StatRow label="New Revenue / mo" value={fmtMoney(monthlyRevenue)} />
-        <StatRow
-          label="6-Month Revenue"
-          value={fmtMoney(sixMonthRevenue)}
-          highlight={pkg.color}
-        />
+        <StatRow label="6-Month Revenue" value={fmtMoney(sixMonthRevenue)} highlight={pkg.color} large />
         <StatRow label="6-Month Investment" value={fmtMoney(sixMonthCost)} />
       </div>
 
-      {/* Narrative summary */}
+      {/* Narrative */}
       <div
         style={{
           border: `1px solid ${pkg.color}44`,
@@ -381,46 +400,36 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
           marginBottom: "0.5rem",
         }}
       >
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.78rem",
-            color: "var(--text)",
-            lineHeight: 1.7,
-            margin: 0,
-          }}
-        >
-          At the end of 6 months on the{" "}
-          <strong style={{ color: pkg.color }}>{pkg.name} plan</strong>, you&apos;d gain{" "}
-          <strong>+{fmt(addVisitors)} extra visitors/month</strong>, convert{" "}
-          <strong>{(cvr * 100).toFixed(1)}%</strong> into leads, and close{" "}
-          <strong>{closeRate}%</strong> of those — generating{" "}
-          <strong style={{ color: pkg.color }}>{fmtMoney(sixMonthRevenue)}</strong> in new
-          revenue against a <strong>{fmtMoney(sixMonthCost)}</strong> investment.{" "}
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--text)", lineHeight: 1.7, margin: 0 }}>
+          {primaryKw
+            ? <>
+                <strong>&ldquo;{primaryKw.keyword}&rdquo;</strong> gets{" "}
+                <strong>{fmt(primaryKw.search_volume)} searches/month</strong>.{" "}
+                Ranking {pkg.positionLabel} delivers roughly{" "}
+                <strong>{(CTR[pkg.targetPosition] * 100).toFixed(0)}% of those clicks</strong> —{" "}
+                <strong style={{ color: pkg.color }}>{fmt(projectedVisitors)} visitors/mo</strong>.
+                {" "}At {(cvr * 100).toFixed(1)}% lead conversion and {closeRate}% close rate, that&apos;s{" "}
+                <strong style={{ color: pkg.color }}>{fmtMoney(sixMonthRevenue)}</strong> over 6 months against a{" "}
+                <strong>{fmtMoney(sixMonthCost)}</strong> investment.{" "}
+              </>
+            : <>
+                On the <strong style={{ color: pkg.color }}>{pkg.name} plan</strong>, projecting{" "}
+                <strong>{fmt(projectedVisitors)} new visitors/mo</strong> at{" "}
+                {(cvr * 100).toFixed(1)}% CVR and {closeRate}% close rate generates{" "}
+                <strong style={{ color: pkg.color }}>{fmtMoney(sixMonthRevenue)}</strong> over 6 months.{" "}
+              </>
+          }
           {roi > 0 && (
-            <>
-              That&apos;s a{" "}
-              <strong style={{ color: pkg.color, fontSize: "0.9rem" }}>
-                {roi.toFixed(1)}× return
-              </strong>{" "}
-              in just 6 months.
-            </>
+            <strong style={{ color: pkg.color, fontSize: "0.9rem" }}>
+              That&apos;s a {roi.toFixed(1)}× return.
+            </strong>
           )}
         </p>
       </div>
 
-      <p
-        style={{
-          marginTop: "1rem",
-          fontFamily: "var(--font-mono)",
-          fontSize: "0.62rem",
-          color: "var(--text-muted)",
-          textAlign: "center",
-          lineHeight: 1.5,
-        }}
-      >
-        Estimates based on industry-average conversion rates and your current organic footprint.
-        Actual results vary by market competitiveness and execution.
+      <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
+        CTR benchmarks based on industry-average organic click-through rates by position.
+        Conversion rates are industry averages — actual results vary.
       </p>
     </div>
   );
