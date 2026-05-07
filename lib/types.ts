@@ -2,6 +2,7 @@ export interface RankData {
   organic_count: number;
   paid_count: number;
   organic_etv: number;
+  organic_traffic: number;
   pos_1_3: number;
   pos_4_10: number;
   pos_11_20: number;
@@ -22,6 +23,7 @@ export interface KeywordItem {
   rank: number;
   search_volume: number;
   cpc: number;
+  opportunity?: boolean;
 }
 
 export interface AIMetrics {
@@ -67,6 +69,7 @@ export interface AuditRequest {
   domain: string;
   step: AuditStep;
   context: Partial<AuditContext>;
+  city?: string;
 }
 
 export interface AuditResponse {

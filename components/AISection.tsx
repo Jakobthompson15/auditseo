@@ -41,8 +41,8 @@ export default function AISection({ metrics, aiKeywords }: AISectionProps) {
             fontSize: "0.65rem",
             color: "var(--text-muted)",
             letterSpacing: "0.08em",
-            background: "rgba(180,106,247,0.1)",
-            border: "1px solid rgba(180,106,247,0.2)",
+            background: "rgba(31,120,255,0.1)",
+            border: "1px solid rgba(31,120,255,0.2)",
             borderRadius: 4,
             padding: "2px 7px",
           }}
@@ -77,8 +77,8 @@ export default function AISection({ metrics, aiKeywords }: AISectionProps) {
                 key={`${kw.keyword}-${i}`}
                 className="card-sm"
                 style={{
-                  background: "rgba(180,106,247,0.06)",
-                  border: "1px solid rgba(180,106,247,0.15)",
+                  background: "rgba(31,120,255,0.06)",
+                  border: "1px solid rgba(31,120,255,0.15)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.875rem",

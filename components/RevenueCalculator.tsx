@@ -18,7 +18,7 @@ const PACKAGES = [
     price: 1299,
     multiplier: 0.50,
     color: "var(--purple)",
-    colorDim: "rgba(124,106,247,0.15)",
+    colorDim: "rgba(31,120,255,0.15)",
     featured: true,
   },
   {
@@ -108,7 +108,9 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
   const [closeRate, setCloseRate] = useState<number>(20);
   const [selectedPlan, setSelectedPlan] = useState<PlanName>("Gold");
 
-  const baseline = Math.max(1, Math.round(rank.organic_etv / 3));
+  const baseline = rank.organic_traffic > 0
+    ? rank.organic_traffic
+    : Math.max(10, rank.organic_count * 3);
   const cvr = INDUSTRY_CVR[industry] ?? 0.02;
   const pkg = PACKAGES.find((p) => p.name === selectedPlan)!;
 
@@ -147,7 +149,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
       className="card fade-up no-print"
       style={{
         marginTop: "1.5rem",
-        border: "1px solid rgba(124,106,247,0.25)",
+        border: "1px solid rgba(31,120,255,0.25)",
       }}
     >
       {/* Header */}
@@ -162,8 +164,8 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
             fontFamily: "var(--font-mono)",
             fontSize: "0.65rem",
             color: "var(--text-muted)",
-            background: "rgba(124,106,247,0.1)",
-            border: "1px solid rgba(124,106,247,0.2)",
+            background: "rgba(31,120,255,0.1)",
+            border: "1px solid rgba(31,120,255,0.2)",
             borderRadius: 4,
             padding: "2px 7px",
           }}

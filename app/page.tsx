@@ -60,6 +60,7 @@ const DEFAULT_RANK: RankData = {
   organic_count: 0,
   paid_count: 0,
   organic_etv: 0,
+  organic_traffic: 0,
   pos_1_3: 0,
   pos_4_10: 0,
   pos_11_20: 0,
@@ -86,6 +87,7 @@ const DEFAULT_COMPETITORS: CompetitorItem[] = [];
 
 export default function Home() {
   const [rawDomain, setRawDomain] = useState("");
+  const [city, setCity] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
   const [steps, setSteps] = useState<StepStatus[]>(makeInitialSteps());
@@ -102,7 +104,7 @@ export default function Home() {
   );
 
   const runFrom = useCallback(
-    async (startStep: AuditStep, domain: string, priorData: Partial<AuditContext>) => {
+    async (startStep: AuditStep, domain: string, cityVal: string, priorData: Partial<AuditContext>) => {
       setIsRunning(true);
       setFailedAtStep(null);
 
@@ -117,7 +119,7 @@ export default function Home() {
           const res = await fetch("/api/audit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain, step, context }),
+            body: JSON.stringify({ domain, step, context, city: cityVal || undefined }),
           });
 
           const json = (await res.json()) as {
@@ -184,7 +186,7 @@ export default function Home() {
     setAuditData({});
     setSteps(makeInitialSteps());
     setHasRun(true);
-    void runFrom("rank", domain, {});
+    void runFrom("rank", domain, city, {});
   }, [rawDomain, runFrom]);
 
   const handleRetry = useCallback(
@@ -198,7 +200,7 @@ export default function Home() {
           i >= idx ? { ...s, status: "pending", error: undefined } : s
         )
       );
-      void runFrom(stepId as AuditStep, domain, auditData);
+      void runFrom(stepId as AuditStep, domain, city, auditData);
     },
     [rawDomain, auditData, runFrom]
   );
@@ -240,32 +242,57 @@ export default function Home() {
     >
       {/* Header */}
       <div className="no-print" style={{ textAlign: "center", marginBottom: "3rem" }}>
-        {/* Syndicate Marketing branding */}
-        {/* To use real logo: save file to /public/logo.svg and uncomment <img> below */}
+        {/* Syndicate Marketing branding — logo is white, shown on dark background */}
         <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "center", alignItems: "center" }}>
-          {/* <img src="/logo.svg" alt="Syndicate Marketing" style={{ height: 40 }} /> */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.75rem" }}>
-            {/* S icon placeholder */}
+          <div
+            style={{
+              background: "#111",
+              borderRadius: 10,
+              padding: "10px 20px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="Syndicate Marketing"
+              style={{ height: 36, display: "block" }}
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = "none";
+                const fallback = el.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.style.display = "inline-flex";
+              }}
+            />
             <div
               style={{
-                width: 36,
-                height: 36,
-                background: "#111",
-                borderRadius: 6,
-                display: "flex",
+                display: "none",
                 alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
+                gap: "0.75rem",
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 900, fontSize: "1.1rem", color: "#fff", letterSpacing: "-0.05em" }}>S</span>
-            </div>
-            <div style={{ textAlign: "left", lineHeight: 1.1 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: "1rem", letterSpacing: "0.2em", color: "var(--text)", textTransform: "uppercase" }}>
-                SYNDICATE
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: "rgba(255,255,255,0.1)",
+                  borderRadius: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontFamily: "var(--font-mono)", fontWeight: 900, fontSize: "1.1rem", color: "#fff", letterSpacing: "-0.05em" }}>S</span>
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "0.62rem", letterSpacing: "0.35em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-                MARKETING
+              <div style={{ textAlign: "left", lineHeight: 1.1 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: "1rem", letterSpacing: "0.2em", color: "#fff", textTransform: "uppercase" }}>
+                  SYNDICATE
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontWeight: 500, fontSize: "0.62rem", letterSpacing: "0.35em", color: "rgba(255,255,255,0.6)", textTransform: "uppercase" }}>
+                  MARKETING
+                </div>
               </div>
             </div>
           </div>
@@ -278,7 +305,7 @@ export default function Home() {
             gap: "0.5rem",
             marginBottom: "1.25rem",
             background: "var(--purple-dim)",
-            border: "1px solid rgba(124,106,247,0.25)",
+            border: "1px solid rgba(31,120,255,0.25)",
             borderRadius: 9999,
             padding: "4px 12px",
           }}
@@ -355,6 +382,8 @@ export default function Home() {
       <DomainInput
         value={rawDomain}
         onChange={setRawDomain}
+        city={city}
+        onCityChange={setCity}
         onSubmit={handleSubmit}
         disabled={isRunning}
       />
@@ -390,7 +419,7 @@ export default function Home() {
                 label="AI Score"
                 score={aiScore}
                 accent="var(--ai)"
-                accentDim="rgba(180,106,247,0.15)"
+                accentDim="rgba(31,120,255,0.15)"
                 sublabel="LLM Visibility"
               />
             </div>
@@ -444,12 +473,12 @@ export default function Home() {
                   letterSpacing: "0.06em",
                   color: "#fff",
                   background: "var(--purple)",
-                  border: "1px solid rgba(124,106,247,0.6)",
+                  border: "1px solid rgba(31,120,255,0.6)",
                   borderRadius: 8,
                   padding: "0.7rem 1.5rem",
                   cursor: "pointer",
                   transition: "opacity 0.15s",
-                  boxShadow: "0 0 20px rgba(124,106,247,0.3)",
+                  boxShadow: "0 0 20px rgba(31,120,255,0.3)",
                 }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";

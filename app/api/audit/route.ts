@@ -43,6 +43,7 @@ const DEFAULT_RANK: RankData = {
   organic_count: 0,
   paid_count: 0,
   organic_etv: 0,
+  organic_traffic: 0,
   pos_1_3: 0,
   pos_4_10: 0,
   pos_11_20: 0,
@@ -109,13 +110,14 @@ function rankPrompt(domain: string): string {
   return `Use the DataForSEO MCP tools to retrieve domain rank overview data for "${domain}".
 Return ONLY a valid JSON object with these exact fields (use 0 for any unavailable value):
 {
-  "organic_count": <number of organic keywords>,
+  "organic_count": <number of organic keywords the domain ranks for>,
   "paid_count": <number of paid/PPC keywords>,
-  "organic_etv": <estimated monthly traffic value USD>,
-  "pos_1_3": <keywords ranking positions 1-3>,
-  "pos_4_10": <keywords ranking positions 4-10>,
-  "pos_11_20": <keywords ranking positions 11-20>,
-  "pos_21_100": <keywords ranking positions 21-100>
+  "organic_etv": <estimated monthly traffic value in USD>,
+  "organic_traffic": <estimated monthly organic visits — this is a visitor COUNT not a dollar value>,
+  "pos_1_3": <number of keywords ranking in positions 1-3>,
+  "pos_4_10": <number of keywords ranking in positions 4-10>,
+  "pos_11_20": <number of keywords ranking in positions 11-20>,
+  "pos_21_100": <number of keywords ranking in positions 21-100>
 }
 No markdown, no explanation — only the JSON object.`;
 }
@@ -134,22 +136,32 @@ Return ONLY a valid JSON object with these exact fields (use 0 for any unavailab
 No markdown, no explanation — only the JSON object.`;
 }
 
-function keywordsPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to get the top 8 organic keywords for "${domain}", ordered by search volume descending.
-Return ONLY a valid JSON array with up to 8 items (use [] if unavailable):
+function keywordsPrompt(domain: string, city?: string): string {
+  const localHint = city
+    ? ` Prioritize keywords with local intent such as "[service] in ${city}" or "[service] ${city}". Include location-specific terms where available.`
+    : "";
+  return `Use the DataForSEO MCP tools to get organic keywords for "${domain}".
+Return ONLY a valid JSON array with up to 10 items (use [] if unavailable):
+- First 6 items: top-ranking keywords ordered by search volume (positions 1-10)
+- Last 4 items: near-page-1 opportunity keywords (positions 11-20 that could be pushed to page 1 with optimization)${localHint}
+Mark the opportunity keywords with "opportunity": true. Current ranking keywords get "opportunity": false.
 [
   {
     "keyword": "<keyword string>",
     "rank": <current ranking position number>,
     "search_volume": <monthly search volume number>,
-    "cpc": <cost per click USD number>
+    "cpc": <cost per click USD number>,
+    "opportunity": <true if position 11-20 near-page-1 opportunity, false otherwise>
   }
 ]
 No markdown, no explanation — only the JSON array.`;
 }
 
-function competitorsPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to get the top 5 organic search competitors for "${domain}".
+function competitorsPrompt(domain: string, city?: string): string {
+  const localScope = city
+    ? ` Focus on local businesses competing for customers in ${city} — avoid national directories, aggregators, or brands that aren't local competitors. Prefer businesses that serve the same geographic area.`
+    : "";
+  return `Use the DataForSEO MCP tools to get the top 5 organic search competitors for "${domain}".${localScope}
 Return ONLY a valid JSON array with up to 5 items (use [] if unavailable):
 [
   {
@@ -231,7 +243,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { domain, step, context = {} } = body;
+  const { domain, step, context = {}, city } = body;
 
   if (!domain || typeof domain !== "string") {
     return NextResponse.json({ error: "Missing or invalid domain" }, { status: 400 });
@@ -264,12 +276,12 @@ export async function POST(req: NextRequest) {
       case "rank": {
         const text = await callWithMCP(rankPrompt(domain));
         data = safeParseJSON<RankData>(text, DEFAULT_RANK);
-        // Ensure all numeric fields are numbers, not undefined
         const r = data as RankData;
         data = {
           organic_count: r.organic_count ?? 0,
           paid_count: r.paid_count ?? 0,
           organic_etv: r.organic_etv ?? 0,
+          organic_traffic: r.organic_traffic ?? 0,
           pos_1_3: r.pos_1_3 ?? 0,
           pos_4_10: r.pos_4_10 ?? 0,
           pos_11_20: r.pos_11_20 ?? 0,
@@ -294,21 +306,22 @@ export async function POST(req: NextRequest) {
       }
 
       case "keywords": {
-        const text = await callWithMCP(keywordsPrompt(domain));
+        const text = await callWithMCP(keywordsPrompt(domain, city));
         const raw = safeParseJSON<KeywordItem[]>(text, []);
         data = (Array.isArray(raw) ? raw : [])
-          .slice(0, 8)
+          .slice(0, 10)
           .map((k) => ({
             keyword: String(k.keyword ?? ""),
             rank: Number(k.rank ?? 0),
             search_volume: Number(k.search_volume ?? 0),
             cpc: Number(k.cpc ?? 0),
+            opportunity: Boolean(k.opportunity ?? false),
           }));
         break;
       }
 
       case "competitors": {
-        const text = await callWithMCP(competitorsPrompt(domain));
+        const text = await callWithMCP(competitorsPrompt(domain, city));
         const raw = safeParseJSON<CompetitorItem[]>(text, []);
         data = (Array.isArray(raw) ? raw : [])
           .slice(0, 5)

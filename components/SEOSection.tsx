@@ -155,7 +155,7 @@ export default function SEOSection({ rank, backlinks }: SEOSectionProps) {
           label="Pos 11–20"
           count={rank.pos_11_20}
           total={totalPositioned}
-          color="rgba(124,106,247,0.5)"
+          color="rgba(31,120,255,0.5)"
         />
         <DistBar
           label="Pos 21–100"

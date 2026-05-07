@@ -11,12 +11,12 @@
   --text: #0d0d1a;
   --text-muted: #6b6b85;
   --text-dim: #44445a;
-  --seo: #0d8c63;
-  --seo-dim: rgba(13, 140, 99, 0.1);
-  --ai: #7a3ecf;
-  --ai-dim: rgba(122, 62, 207, 0.1);
-  --purple: #5a42c9;
-  --purple-dim: rgba(90, 66, 201, 0.1);
+  --seo: #61ce70;
+  --seo-dim: rgba(97, 206, 112, 0.1);
+  --ai: #1f78ff;
+  --ai-dim: rgba(31, 120, 255, 0.1);
+  --purple: #1f78ff;
+  --purple-dim: rgba(31, 120, 255, 0.1);
   --error: #c9294a;
   --error-dim: rgba(201, 41, 74, 0.1);
   --font-mono: "DM Mono", monospace;

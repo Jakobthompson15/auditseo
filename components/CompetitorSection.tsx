@@ -127,7 +127,7 @@ export default function CompetitorSection({
                 <tr
                   key={row.domain}
                   style={{
-                    background: row.isAudited ? "rgba(124,106,247,0.06)" : "transparent",
+                    background: row.isAudited ? "rgba(31,120,255,0.06)" : "transparent",
                     borderBottom: "1px solid var(--border)",
                   }}
                 >
@@ -140,7 +140,7 @@ export default function CompetitorSection({
                             fontSize: "0.6rem",
                             color: "var(--purple)",
                             background: "var(--purple-dim)",
-                            border: "1px solid rgba(124,106,247,0.3)",
+                            border: "1px solid rgba(31,120,255,0.3)",
                             borderRadius: 4,
                             padding: "1px 5px",
                             flexShrink: 0,

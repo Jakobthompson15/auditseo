@@ -52,7 +52,7 @@ export default function KeywordsTable({ keywords }: KeywordsTableProps) {
         >
           <thead>
             <tr>
-              {["Keyword", "Rank", "Search Volume", "CPC"].map((h) => (
+              {["Keyword", "Rank", "Search Volume", "CPC", ""].map((h) => (
                 <th
                   key={h}
                   style={{
@@ -138,12 +138,35 @@ export default function KeywordsTable({ keywords }: KeywordsTableProps) {
                 <td
                   style={{
                     padding: "0.75rem 0",
+                    paddingRight: "1rem",
                     fontFamily: "var(--font-mono)",
                     fontSize: "0.8rem",
                     color: "var(--text-dim)",
                   }}
                 >
                   {kw.cpc > 0 ? fmtCpc(kw.cpc) : "—"}
+                </td>
+
+                {/* Opportunity badge */}
+                <td style={{ padding: "0.75rem 0", whiteSpace: "nowrap" }}>
+                  {kw.opportunity && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "0.6rem",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "var(--seo)",
+                        background: "var(--seo-dim)",
+                        border: "1px solid var(--seo)",
+                        borderRadius: 4,
+                        padding: "2px 6px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Opportunity
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

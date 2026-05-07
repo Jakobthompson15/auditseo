@@ -11,7 +11,7 @@ export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
       className="card fade-up analysis-card"
       style={{
         marginTop: "1.5rem",
-        border: "1px solid rgba(124,106,247,0.2)",
+        border: "1px solid rgba(31,120,255,0.2)",
       }}
     >
       <div className="section-header">
@@ -25,8 +25,8 @@ export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
             fontFamily: "var(--font-mono)",
             fontSize: "0.65rem",
             color: "var(--text-muted)",
-            background: "rgba(124,106,247,0.1)",
-            border: "1px solid rgba(124,106,247,0.2)",
+            background: "rgba(31,120,255,0.1)",
+            border: "1px solid rgba(31,120,255,0.2)",
             borderRadius: 4,
             padding: "2px 7px",
           }}
