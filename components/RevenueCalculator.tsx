@@ -4,11 +4,13 @@ import { useState } from "react";
 import { fmt } from "@/lib/audit";
 import type { RankData } from "@/lib/types";
 
+// floor = minimum new visitors/mo the campaign will generate regardless of current traffic
 const PACKAGES = [
   {
     name: "Silver",
     price: 799,
     multiplier: 0.20,
+    floor: 150,
     color: "#8B9AAD",
     colorDim: "rgba(139,154,173,0.10)",
     featured: false,
@@ -17,6 +19,7 @@ const PACKAGES = [
     name: "Gold",
     price: 1299,
     multiplier: 0.50,
+    floor: 400,
     color: "var(--purple)",
     colorDim: "rgba(31,120,255,0.15)",
     featured: true,
@@ -25,6 +28,7 @@ const PACKAGES = [
     name: "Platinum",
     price: 1999,
     multiplier: 1.00,
+    floor: 900,
     color: "#7DD4FC",
     colorDim: "rgba(125,212,252,0.10)",
     featured: false,
@@ -114,7 +118,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
   const cvr = INDUSTRY_CVR[industry] ?? 0.02;
   const pkg = PACKAGES.find((p) => p.name === selectedPlan)!;
 
-  const addVisitors = Math.round(baseline * pkg.multiplier);
+  const addVisitors = Math.max(Math.round(baseline * pkg.multiplier), pkg.floor);
   const monthlyLeads = addVisitors * cvr;
   const monthlyClients = monthlyLeads * (closeRate / 100);
   const monthlyRevenue = monthlyClients * ticketSize;
@@ -183,7 +187,7 @@ export default function RevenueCalculator({ rank }: RevenueCalculatorProps) {
           lineHeight: 1.6,
         }}
       >
-        Based on your current SEO footprint (~{fmt(baseline)} est. monthly visitors). Adjust inputs to model your market.
+        Based on realistic 6-month SEO outcomes for your market. Current organic footprint: ~{fmt(baseline)} visitors/mo. Adjust inputs below to match your business.
       </p>
 
       {/* Inputs */}
