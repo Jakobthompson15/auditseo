@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fmt } from "@/lib/audit";
 import type { RankData, KeywordItem } from "@/lib/types";
 
+// Industry-average organic CTR by ranking position
 const CTR: Record<number, number> = { 1: 0.276, 3: 0.110 };
 
 const PACKAGES = [
@@ -50,7 +51,6 @@ const INDUSTRY_CVR: Record<string, number> = {
   "Restaurant & Hospitality": 0.040,
   "Technology": 0.020,
 };
-
 const INDUSTRIES = Object.keys(INDUSTRY_CVR);
 
 interface Props {
@@ -64,16 +64,22 @@ function fmtMoney(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export default function RevenueCalculator({ rank, keywords = [] }: Props) {
+export default function RevenueCalculator({ keywords = [] }: Props) {
   const [industry, setIndustry] = useState("Local Services");
   const [ticketSize, setTicketSize] = useState(3000);
   const [closeRate, setCloseRate] = useState(20);
-  const [kwIdx, setKwIdx] = useState(0);
-  const [showKwPicker, setShowKwPicker] = useState(false);
 
-  const sorted = [...keywords].sort((a, b) => b.search_volume - a.search_volume);
-  const hasKws = sorted.length > 0;
-  const primaryKw = hasKws ? sorted[Math.min(kwIdx, sorted.length - 1)] : null;
+  // Keyword + volume are both manually editable — the sales rep sets the RIGHT keyword
+  const [kwText, setKwText] = useState("");
+  const [kwVolume, setKwVolume] = useState(2400);
+
+  // Filter out brand/navigational keywords (low volume or single-word) from audit suggestions
+  const suggestions = [...keywords]
+    .filter((k) => k.search_volume > 200 && k.keyword.includes(" "))
+    .sort((a, b) => b.search_volume - a.search_volume)
+    .slice(0, 5);
+
+  const displayKw = kwText.trim() || "your target keyword";
   const cvr = INDUSTRY_CVR[industry] ?? 0.025;
 
   const inputStyle: React.CSSProperties = {
@@ -110,46 +116,68 @@ export default function RevenueCalculator({ rank, keywords = [] }: Props) {
         </span>
       </div>
 
-      {/* Keyword hero */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        {primaryKw ? (
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "1.05rem", fontWeight: 700, color: "var(--text)" }}>
-              &ldquo;{primaryKw.keyword}&rdquo;
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              {fmt(primaryKw.search_volume)} searches/mo
-              {primaryKw.rank > 0 && ` · currently #${primaryKw.rank}`}
-            </span>
-            <button
-              onClick={() => setShowKwPicker((v) => !v)}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--purple)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
-            >
-              {showKwPicker ? "hide" : "change keyword"}
-            </button>
-          </div>
-        ) : (
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            Run an audit to model keyword-specific ROI.
-          </p>
-        )}
+      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "1.5rem", lineHeight: 1.6 }}>
+        Enter a high-volume keyword your client should rank for — not just what they rank for today.
+        We&apos;ll show the ROI of getting them to that position.
+      </p>
 
-        {showKwPicker && hasKws && (
-          <select
-            value={kwIdx}
-            onChange={(e) => { setKwIdx(Number(e.target.value)); setShowKwPicker(false); }}
-            style={{ ...inputStyle, marginTop: "0.6rem" }}
-          >
-            {sorted.map((kw, i) => (
-              <option key={i} value={i}>
-                {kw.keyword} — {fmt(kw.search_volume)}/mo{kw.rank > 0 ? ` (#${kw.rank})` : ""}
-              </option>
-            ))}
-          </select>
-        )}
+      {/* Keyword + volume inputs */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0.75rem", marginBottom: suggestions.length > 0 ? "0.75rem" : "1.5rem", alignItems: "end" }}>
+        <div>
+          <label style={labelStyle}>Target Keyword</label>
+          <input
+            type="text"
+            placeholder='e.g. "window replacement chicago"'
+            value={kwText}
+            onChange={(e) => setKwText(e.target.value)}
+            style={inputStyle}
+            spellCheck={false}
+          />
+        </div>
+        <div style={{ minWidth: 130 }}>
+          <label style={labelStyle}>Monthly Searches</label>
+          <input
+            type="number"
+            min={100}
+            value={kwVolume}
+            onChange={(e) => setKwVolume(Math.max(1, Number(e.target.value)))}
+            style={inputStyle}
+          />
+        </div>
       </div>
 
-      {/* Inputs */}
+      {/* Audit keyword suggestions — only multi-word, meaningful volume */}
+      {suggestions.length > 0 && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            From audit —
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)" }}> quick picks:</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.4rem" }}>
+            {suggestions.map((kw, i) => (
+              <button
+                key={i}
+                onClick={() => { setKwText(kw.keyword); setKwVolume(kw.search_volume); }}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.65rem",
+                  color: kwText === kw.keyword ? "var(--purple)" : "var(--text-dim)",
+                  background: kwText === kw.keyword ? "rgba(31,120,255,0.1)" : "var(--card-hover)",
+                  border: `1px solid ${kwText === kw.keyword ? "rgba(31,120,255,0.3)" : "var(--border)"}`,
+                  borderRadius: 5,
+                  padding: "3px 9px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {kw.keyword} <span style={{ opacity: 0.6 }}>· {fmt(kw.search_volume)}/mo</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Business inputs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.875rem", marginBottom: "1.75rem" }}>
         <div>
           <label style={labelStyle}>Industry</label>
@@ -176,13 +204,8 @@ export default function RevenueCalculator({ rank, keywords = [] }: Props) {
       {/* Plan cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }} className="calculator-grid">
         {PACKAGES.map((pkg) => {
-          const kwVol = primaryKw
-            ? (pkg.keywordCount === 3
-                ? sorted.slice(kwIdx, kwIdx + 3).reduce((s, k) => s + k.search_volume, 0)
-                : primaryKw.search_volume)
-            : Math.max(rank.organic_traffic, rank.organic_count * 5);
-
-          const visitors = Math.round(kwVol * CTR[pkg.targetPosition]);
+          const vol = pkg.keywordCount === 3 ? kwVolume * 2.2 : kwVolume;
+          const visitors = Math.round(vol * CTR[pkg.targetPosition]);
           const leads = visitors * cvr;
           const clients = leads * (closeRate / 100);
           const monthlyRev = clients * ticketSize;
@@ -201,7 +224,7 @@ export default function RevenueCalculator({ rank, keywords = [] }: Props) {
                 position: "relative",
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.6rem",
+                gap: "0.65rem",
               }}
             >
               {pkg.featured && (
@@ -213,20 +236,22 @@ export default function RevenueCalculator({ rank, keywords = [] }: Props) {
               {/* Name + price */}
               <div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: pkg.color, fontWeight: 700 }}>{pkg.name}</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>${pkg.price.toLocaleString()}<span style={{ fontSize: "0.62rem", fontWeight: 400, color: "var(--text-muted)" }}>/mo</span></div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 800, color: "var(--text)", lineHeight: 1.15 }}>
+                  ${pkg.price.toLocaleString()}
+                  <span style={{ fontSize: "0.62rem", fontWeight: 400, color: "var(--text-muted)" }}>/mo</span>
+                </div>
               </div>
 
               {/* Position badge */}
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: pkg.color, background: `${pkg.color}18`, border: `1px solid ${pkg.color}44`, borderRadius: 4, padding: "2px 7px", display: "inline-block", alignSelf: "flex-start" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.63rem", color: pkg.color, background: `${pkg.color}18`, border: `1px solid ${pkg.color}44`, borderRadius: 4, padding: "2px 7px", display: "inline-block", alignSelf: "flex-start" }}>
                 {pkg.positionLabel}
               </div>
 
-              {/* Divider */}
               <div style={{ borderTop: "1px solid var(--border)" }} />
 
               {/* Visitors */}
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.4rem", fontWeight: 800, color: "var(--text)", lineHeight: 1 }}>{fmt(visitors)}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.5rem", fontWeight: 900, color: "var(--text)", lineHeight: 1 }}>{fmt(visitors)}</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>visitors / mo</div>
               </div>
 
@@ -237,20 +262,21 @@ export default function RevenueCalculator({ rank, keywords = [] }: Props) {
               </div>
 
               {/* ROI */}
-              {roi > 0 && (
-                <div style={{ marginTop: "auto", background: "rgba(0,0,0,0.04)", border: `1px solid ${pkg.color}33`, borderRadius: 6, padding: "0.5rem", textAlign: "center" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.5rem", fontWeight: 900, color: pkg.color, lineHeight: 1 }}>{roi.toFixed(1)}×</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.58rem", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>return on investment</div>
+              <div style={{ marginTop: "auto", background: "rgba(0,0,0,0.04)", border: `1px solid ${pkg.color}33`, borderRadius: 6, padding: "0.5rem", textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.6rem", fontWeight: 900, color: pkg.color, lineHeight: 1 }}>
+                  {roi > 0 ? `${roi.toFixed(1)}×` : "—"}
                 </div>
-              )}
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.58rem", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>return on investment</div>
+              </div>
             </div>
           );
         })}
       </div>
 
+      {/* Footer note */}
       <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-        Traffic based on ranking {primaryKw ? `"${primaryKw.keyword}"` : "target keywords"} at each position using industry-average CTR benchmarks.
-        Conversion rates are averages — actual results vary.
+        &ldquo;{displayKw}&rdquo; · {fmt(kwVolume)} searches/mo · projections use industry-average CTR at each ranking position.
+        Platinum estimates top 3 related keywords combined.
       </p>
     </div>
   );
