@@ -453,7 +453,7 @@ export default function Home() {
 
           {/* Revenue calculator — web-only sales tool */}
           {showAnalysis && !isRunning && (
-            <RevenueCalculator rank={rank} keywords={keywords} />
+            <RevenueCalculator />
           )}
 
           {/* PDF download — only shown when full report is ready */}

@@ -2,7 +2,20 @@
 
 import { useState } from "react";
 import { fmt } from "@/lib/audit";
-import type { RankData, KeywordItem } from "@/lib/types";
+
+// Realistic monthly search volume benchmark for the primary service keyword
+// in each industry — what a well-optimized local business can target
+const INDUSTRY_DATA: Record<string, { searchVolume: number; cvr: number }> = {
+  "Local Services":          { searchVolume: 2400,  cvr: 0.030 },
+  "Home Improvement":        { searchVolume: 3600,  cvr: 0.025 },
+  "Legal & Professional":    { searchVolume: 1800,  cvr: 0.020 },
+  "Healthcare":              { searchVolume: 2200,  cvr: 0.020 },
+  "Real Estate":             { searchVolume: 4400,  cvr: 0.015 },
+  "Financial Services":      { searchVolume: 1600,  cvr: 0.015 },
+  "Restaurant & Hospitality":{ searchVolume: 5400,  cvr: 0.040 },
+  "E-commerce":              { searchVolume: 6600,  cvr: 0.025 },
+  "Technology":              { searchVolume: 2000,  cvr: 0.020 },
+};
 
 // Industry-average organic CTR by ranking position
 const CTR: Record<number, number> = { 1: 0.276, 3: 0.110 };
@@ -12,7 +25,7 @@ const PACKAGES = [
     name: "Silver",
     price: 799,
     targetPosition: 3,
-    keywordCount: 1,
+    volumeMultiplier: 1,
     positionLabel: "Top 3",
     color: "#8B9AAD",
     colorDim: "rgba(139,154,173,0.08)",
@@ -22,7 +35,7 @@ const PACKAGES = [
     name: "Gold",
     price: 1299,
     targetPosition: 1,
-    keywordCount: 1,
+    volumeMultiplier: 1,
     positionLabel: "Rank #1",
     color: "var(--purple)",
     colorDim: "rgba(31,120,255,0.12)",
@@ -32,7 +45,7 @@ const PACKAGES = [
     name: "Platinum",
     price: 1999,
     targetPosition: 1,
-    keywordCount: 3,
+    volumeMultiplier: 2.5, // #1 across 3 related keywords
     positionLabel: "#1 · 3 keywords",
     color: "#38bdf8",
     colorDim: "rgba(56,189,248,0.08)",
@@ -40,23 +53,7 @@ const PACKAGES = [
   },
 ] as const;
 
-const INDUSTRY_CVR: Record<string, number> = {
-  "Local Services": 0.030,
-  "Legal & Professional": 0.020,
-  "Healthcare": 0.020,
-  "Home Improvement": 0.025,
-  "Real Estate": 0.015,
-  "Financial Services": 0.015,
-  "E-commerce": 0.025,
-  "Restaurant & Hospitality": 0.040,
-  "Technology": 0.020,
-};
-const INDUSTRIES = Object.keys(INDUSTRY_CVR);
-
-interface Props {
-  rank: RankData;
-  keywords?: KeywordItem[];
-}
+const INDUSTRIES = Object.keys(INDUSTRY_DATA);
 
 function fmtMoney(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -64,23 +61,12 @@ function fmtMoney(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export default function RevenueCalculator({ keywords = [] }: Props) {
+export default function RevenueCalculator() {
   const [industry, setIndustry] = useState("Local Services");
   const [ticketSize, setTicketSize] = useState(3000);
   const [closeRate, setCloseRate] = useState(20);
 
-  // Keyword + volume are both manually editable — the sales rep sets the RIGHT keyword
-  const [kwText, setKwText] = useState("");
-  const [kwVolume, setKwVolume] = useState(2400);
-
-  // Filter out brand/navigational keywords (low volume or single-word) from audit suggestions
-  const suggestions = [...keywords]
-    .filter((k) => k.search_volume > 200 && k.keyword.includes(" "))
-    .sort((a, b) => b.search_volume - a.search_volume)
-    .slice(0, 5);
-
-  const displayKw = kwText.trim() || "your target keyword";
-  const cvr = INDUSTRY_CVR[industry] ?? 0.025;
+  const { searchVolume, cvr } = INDUSTRY_DATA[industry];
 
   const inputStyle: React.CSSProperties = {
     background: "var(--card)",
@@ -88,8 +74,8 @@ export default function RevenueCalculator({ keywords = [] }: Props) {
     borderRadius: 7,
     color: "var(--text)",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.82rem",
-    padding: "0.5rem 0.65rem",
+    fontSize: "0.85rem",
+    padding: "0.55rem 0.7rem",
     outline: "none",
     width: "100%",
   };
@@ -110,74 +96,17 @@ export default function RevenueCalculator({ keywords = [] }: Props) {
       {/* Header */}
       <div className="section-header">
         <span className="section-dot" style={{ background: "var(--purple)" }} />
-        <span className="section-title" style={{ color: "var(--purple)" }}>Keyword ROI Projector</span>
+        <span className="section-title" style={{ color: "var(--purple)" }}>Your Growth Potential</span>
         <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", background: "rgba(31,120,255,0.1)", border: "1px solid rgba(31,120,255,0.2)", borderRadius: 4, padding: "2px 7px" }}>
-          6-Month ROI
+          ROI Estimator
         </span>
       </div>
 
       <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "1.5rem", lineHeight: 1.6 }}>
-        Enter a high-volume keyword your client should rank for — not just what they rank for today.
-        We&apos;ll show the ROI of getting them to that position.
+        Based on industry-average search volume for your market. Adjust your numbers below.
       </p>
 
-      {/* Keyword + volume inputs */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0.75rem", marginBottom: suggestions.length > 0 ? "0.75rem" : "1.5rem", alignItems: "end" }}>
-        <div>
-          <label style={labelStyle}>Target Keyword</label>
-          <input
-            type="text"
-            placeholder='e.g. "window replacement chicago"'
-            value={kwText}
-            onChange={(e) => setKwText(e.target.value)}
-            style={inputStyle}
-            spellCheck={false}
-          />
-        </div>
-        <div style={{ minWidth: 130 }}>
-          <label style={labelStyle}>Monthly Searches</label>
-          <input
-            type="number"
-            min={100}
-            value={kwVolume}
-            onChange={(e) => setKwVolume(Math.max(1, Number(e.target.value)))}
-            style={inputStyle}
-          />
-        </div>
-      </div>
-
-      {/* Audit keyword suggestions — only multi-word, meaningful volume */}
-      {suggestions.length > 0 && (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            From audit —
-          </span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)" }}> quick picks:</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.4rem" }}>
-            {suggestions.map((kw, i) => (
-              <button
-                key={i}
-                onClick={() => { setKwText(kw.keyword); setKwVolume(kw.search_volume); }}
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.65rem",
-                  color: kwText === kw.keyword ? "var(--purple)" : "var(--text-dim)",
-                  background: kwText === kw.keyword ? "rgba(31,120,255,0.1)" : "var(--card-hover)",
-                  border: `1px solid ${kwText === kw.keyword ? "rgba(31,120,255,0.3)" : "var(--border)"}`,
-                  borderRadius: 5,
-                  padding: "3px 9px",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {kw.keyword} <span style={{ opacity: 0.6 }}>· {fmt(kw.search_volume)}/mo</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Business inputs */}
+      {/* Inputs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.875rem", marginBottom: "1.75rem" }}>
         <div>
           <label style={labelStyle}>Industry</label>
@@ -188,15 +117,15 @@ export default function RevenueCalculator({ keywords = [] }: Props) {
         <div>
           <label style={labelStyle}>Avg. Ticket Size</label>
           <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: "0.65rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
-            <input type="number" min={100} value={ticketSize} onChange={(e) => setTicketSize(Math.max(1, Number(e.target.value)))} style={{ ...inputStyle, paddingLeft: "1.35rem" }} />
+            <span style={{ position: "absolute", left: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
+            <input type="number" min={100} value={ticketSize} onChange={(e) => setTicketSize(Math.max(1, Number(e.target.value)))} style={{ ...inputStyle, paddingLeft: "1.4rem" }} />
           </div>
         </div>
         <div>
           <label style={labelStyle}>Close Rate</label>
           <div style={{ position: "relative" }}>
             <input type="number" min={1} max={100} value={closeRate} onChange={(e) => setCloseRate(Math.min(100, Math.max(1, Number(e.target.value))))} style={{ ...inputStyle, paddingRight: "1.6rem" }} />
-            <span style={{ position: "absolute", right: "0.65rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", pointerEvents: "none" }}>%</span>
+            <span style={{ position: "absolute", right: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>%</span>
           </div>
         </div>
       </div>
@@ -204,7 +133,7 @@ export default function RevenueCalculator({ keywords = [] }: Props) {
       {/* Plan cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }} className="calculator-grid">
         {PACKAGES.map((pkg) => {
-          const vol = pkg.keywordCount === 3 ? kwVolume * 2.2 : kwVolume;
+          const vol = searchVolume * pkg.volumeMultiplier;
           const visitors = Math.round(vol * CTR[pkg.targetPosition]);
           const leads = visitors * cvr;
           const clients = leads * (closeRate / 100);
@@ -273,10 +202,9 @@ export default function RevenueCalculator({ keywords = [] }: Props) {
         })}
       </div>
 
-      {/* Footer note */}
       <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-        &ldquo;{displayKw}&rdquo; · {fmt(kwVolume)} searches/mo · projections use industry-average CTR at each ranking position.
-        Platinum estimates top 3 related keywords combined.
+        Based on industry-average search volumes and organic CTR benchmarks by ranking position.
+        Actual results vary by market and competition.
       </p>
     </div>
   );
