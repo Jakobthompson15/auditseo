@@ -120,9 +120,11 @@ No markdown, no explanation — only the JSON array.`;
 
 function competitorsPrompt(domain: string, city?: string): string {
   const localScope = city
-    ? ` Focus on local businesses competing for customers in ${city} — avoid national directories, aggregators, or brands that aren't local competitors. Prefer businesses that serve the same geographic area.`
+    ? ` Focus exclusively on businesses competing for the same customers in ${city} and nearby areas.`
     : "";
-  return `Use the DataForSEO MCP tools to get the top 5 organic search competitors for "${domain}".${localScope}
+  return `Use the DataForSEO MCP tools to get the top 5 closest direct business competitors for "${domain}".${localScope}
+Return ONLY direct competitors — companies offering the same core service or product to the same target market as this domain.
+EXCLUDE without exception: job boards (indeed.com, linkedin.com, ziprecruiter.com), review aggregators (trustpilot.com, yelp.com, g2.com, glassdoor.com), social networks, national directories, news sites, Wikipedia, and any domain that does not directly sell the same product or service as this business.
 Return ONLY a valid JSON array with up to 5 items (use [] if unavailable):
 [
   {
@@ -168,12 +170,13 @@ function analysisPrompt(
 
 ${JSON.stringify(context, null, 2)}
 
-Write exactly 3 sentences of expert marketing analysis:
-1. Assess the SEO authority — cite specific numbers (domain rank, organic keywords, top-3 rankings, referring domains).
-2. Evaluate the AI/LLM visibility signal — cite total mentions, AI search volume, and answer vs question ratio.
-3. Give one concrete strategic recommendation tailored to this domain's specific strengths and gaps.
-
-Write as flowing prose. No bullet points, no headers, no markdown. Use the actual numbers from the data.`;
+Return ONLY a valid JSON object with exactly these 3 fields (1-2 sentences each, no markdown):
+{
+  "seo": "<assess SEO authority — cite specific numbers: domain rank, organic keywords, top-3 rankings, referring domains>",
+  "ai": "<evaluate AI/LLM visibility — cite total mentions, AI search volume, answer vs question ratio>",
+  "recommendation": "<one concrete strategic recommendation tailored to this domain's specific strengths and gaps>"
+}
+No markdown, no explanation — only the JSON object.`;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────

@@ -453,7 +453,7 @@ export default function Home() {
 
           {/* Revenue calculator — web-only sales tool */}
           {showAnalysis && !isRunning && (
-            <RevenueCalculator city={city || undefined} />
+            <RevenueCalculator city={city || undefined} keywords={keywords.length > 0 ? keywords : undefined} />
           )}
 
           {/* PDF download — only shown when full report is ready */}

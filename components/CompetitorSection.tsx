@@ -75,7 +75,7 @@ export default function CompetitorSection({
       <div className="section-header">
         <span className="section-dot" style={{ background: "var(--error)" }} />
         <span className="section-title" style={{ color: "var(--error)" }}>
-          Industry Leaders
+          Direct Competitors
         </span>
         <span
           style={{

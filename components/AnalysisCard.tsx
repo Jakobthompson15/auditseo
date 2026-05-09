@@ -5,7 +5,29 @@ interface AnalysisCardProps {
   pills: string[];
 }
 
+interface AnalysisSection {
+  seo: string;
+  ai: string;
+  recommendation: string;
+}
+
+const BULLETS: { key: keyof AnalysisSection; label: string; color: string; icon: string }[] = [
+  { key: "seo", label: "SEO Authority", color: "var(--seo)", icon: "📈" },
+  { key: "ai", label: "AI Visibility", color: "var(--ai)", icon: "🤖" },
+  { key: "recommendation", label: "Recommendation", color: "var(--purple)", icon: "🎯" },
+];
+
 export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
+  let structured: AnalysisSection | null = null;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (parsed && typeof parsed.seo === "string" && typeof parsed.ai === "string") {
+      structured = parsed as unknown as AnalysisSection;
+    }
+  } catch {
+    // fall through to plain text
+  }
+
   return (
     <div
       className="card fade-up analysis-card"
@@ -35,17 +57,62 @@ export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
         </span>
       </div>
 
-      <p
-        style={{
-          fontFamily: "var(--font-body)",
-          fontSize: "0.93rem",
-          lineHeight: 1.7,
-          color: "var(--text)",
-          marginBottom: pills.length > 0 ? "1.25rem" : 0,
-        }}
-      >
-        {text}
-      </p>
+      {structured ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem", marginBottom: pills.length > 0 ? "1.25rem" : 0 }}>
+          {BULLETS.map(({ key, label, color }) => (
+            <div
+              key={key}
+              style={{
+                display: "flex",
+                gap: "0.875rem",
+                padding: "0.75rem",
+                background: "var(--card-hover)",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.6rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color,
+                  minWidth: 100,
+                  paddingTop: "0.15rem",
+                  flexShrink: 0,
+                }}
+              >
+                {label}
+              </div>
+              <p
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.88rem",
+                  lineHeight: 1.6,
+                  color: "var(--text)",
+                  margin: 0,
+                }}
+              >
+                {structured![key]}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.93rem",
+            lineHeight: 1.7,
+            color: "var(--text)",
+            marginBottom: pills.length > 0 ? "1.25rem" : 0,
+          }}
+        >
+          {text}
+        </p>
+      )}
 
       {pills.length > 0 && (
         <div
