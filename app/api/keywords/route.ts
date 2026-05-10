@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callWithMCP } from "@/lib/mcp";
-import { safeParseJSON } from "@/lib/audit";
+import { dfsPost } from "@/lib/dataforseo";
 
 export interface KeywordResearchItem {
   keyword: string;
@@ -14,19 +13,18 @@ export interface KeywordResearchResponse {
   city: string;
 }
 
-function researchPrompt(industry: string, city: string): string {
-  return `Use the DataForSEO MCP keyword research tools to find the top 10 most searched service keywords for ${industry} businesses in ${city}.
-
-Use keyword ideas, keyword suggestions, or Google Ads keyword planning tools available via DataForSEO to find real search volume data.
-Focus on commercial-intent, service-related keywords — the terms people type when they want to hire or buy (e.g. "${industry.toLowerCase()} services ${city}", "${industry.toLowerCase()} near me", "best ${industry.toLowerCase()} ${city}").
-Exclude brand names, informational queries (what is, how to), and single-word queries.
-
-Return ONLY a valid JSON array sorted by search_volume descending:
-[
-  { "keyword": "<keyword phrase>", "search_volume": <monthly search volume number> }
-]
-Up to 10 items. Use 0 for unavailable volumes. No markdown, no explanation — only the JSON array.`;
-}
+// Seed keywords per industry — city is appended to the first 3 to bias results locally
+const INDUSTRY_SEEDS: Record<string, string[]> = {
+  "Local Services":           ["pest control", "plumber", "electrician", "hvac services", "house cleaning", "lawn care", "handyman"],
+  "Home Improvement":         ["roofing contractor", "kitchen remodel", "bathroom renovation", "flooring installation", "window replacement", "painting contractor"],
+  "Legal & Professional":     ["personal injury lawyer", "divorce attorney", "criminal defense attorney", "estate planning attorney", "business lawyer"],
+  "Healthcare":               ["urgent care", "family doctor", "chiropractor", "dentist", "physical therapy"],
+  "Real Estate":              ["homes for sale", "real estate agent", "property management", "houses for rent", "realtor"],
+  "Financial Services":       ["financial advisor", "tax preparation", "mortgage broker", "insurance agent", "bookkeeping services"],
+  "Restaurant & Hospitality": ["restaurant near me", "catering services", "food delivery", "event catering", "private dining"],
+  "E-commerce":               ["online shopping", "free shipping", "buy online", "same day delivery", "discount store"],
+  "Technology":               ["it support", "managed it services", "software development", "cybersecurity", "cloud services"],
+};
 
 export async function POST(req: NextRequest) {
   let body: { industry?: string; city?: string };
@@ -43,20 +41,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "industry and city are required" }, { status: 400 });
   }
 
+  const seeds = INDUSTRY_SEEDS[industry] ?? INDUSTRY_SEEDS["Local Services"]!;
+  // Prepend city to first 3 seeds to surface city-specific keywords
+  const citySeeds = seeds.slice(0, 3).map(s => `${s} ${city}`);
+  const allSeeds = [...citySeeds, ...seeds].slice(0, 8);
+
   try {
-    const text = await callWithMCP(researchPrompt(industry, city));
-    const raw = safeParseJSON<KeywordResearchItem[]>(text, []);
-    const keywords = (Array.isArray(raw) ? raw : [])
-      .slice(0, 10)
-      .map((k) => ({
-        keyword: String(k.keyword ?? ""),
-        search_volume: Number(k.search_volume ?? 0),
+    type KwIdeasItem = {
+      keyword?: string;
+      keyword_info?: { search_volume?: number; cpc?: number };
+    };
+    type KwIdeasResult = Array<{ items?: KwIdeasItem[] }>;
+
+    const result = await dfsPost<KwIdeasResult>(
+      "/v3/dataforseo_labs/google/keyword_ideas/live",
+      [{
+        keywords: allSeeds,
+        location_code: 2840,
+        language_code: "en",
+        limit: 50,
+        order_by: ["keyword_info.search_volume,desc"],
+      }]
+    );
+
+    const items = result[0]?.items ?? [];
+    const keywords: KeywordResearchItem[] = items
+      .map(item => ({
+        keyword: item.keyword ?? "",
+        search_volume: item.keyword_info?.search_volume ?? 0,
       }))
-      .filter((k) => k.keyword.length > 0);
+      .filter(k => k.keyword && k.search_volume > 0)
+      .slice(0, 10);
 
     const totalVolume = keywords.reduce((sum, k) => sum + k.search_volume, 0);
 
-    return NextResponse.json({ keywords, totalVolume, industry, city } satisfies KeywordResearchResponse);
+    return NextResponse.json({
+      keywords,
+      totalVolume,
+      industry,
+      city,
+    } satisfies KeywordResearchResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";
     console.error("[keywords]", message);

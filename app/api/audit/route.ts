@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import type {
   AuditRequest,
   AuditStep,
@@ -10,10 +11,9 @@ import type {
   AIKeywordItem,
   AuditContext,
 } from "@/lib/types";
-import { safeParseJSON } from "@/lib/audit";
-import { callWithMCP } from "@/lib/mcp";
+import { dfsPost } from "@/lib/dataforseo";
 
-// ── Rate limiting (in-memory) ──────────────────────────────────────────────
+// ── Rate limiting ──────────────────────────────────────────────────────────
 const rateLimitStore = new Map<string, { count: number; reset: number }>();
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -38,134 +38,37 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-// ── Defaults (safe fallbacks so the UI never sees "undefined") ─────────────
+// ── Competitor blocklist ───────────────────────────────────────────────────
+const COMPETITOR_BLOCKLIST = new Set([
+  "indeed.com", "linkedin.com", "ziprecruiter.com", "glassdoor.com",
+  "monster.com", "careerbuilder.com", "simplyhired.com",
+  "trustpilot.com", "yelp.com", "g2.com", "capterra.com", "bbb.org",
+  "angi.com", "homeadvisor.com", "thumbtack.com", "bark.com",
+  "facebook.com", "twitter.com", "x.com", "instagram.com",
+  "youtube.com", "tiktok.com", "pinterest.com",
+  "wikipedia.org", "reddit.com", "quora.com",
+  "amazon.com", "ebay.com", "walmart.com", "etsy.com",
+  "google.com", "bing.com", "yahoo.com",
+  "houzz.com", "angieslist.com", "porch.com",
+  "yellowpages.com", "whitepages.com", "manta.com",
+]);
+
+// ── Defaults ───────────────────────────────────────────────────────────────
 const DEFAULT_RANK: RankData = {
-  organic_count: 0,
-  paid_count: 0,
-  organic_etv: 0,
-  organic_traffic: 0,
-  pos_1_3: 0,
-  pos_4_10: 0,
-  pos_11_20: 0,
-  pos_21_100: 0,
+  organic_count: 0, paid_count: 0, organic_etv: 0, organic_traffic: 0,
+  pos_1_3: 0, pos_4_10: 0, pos_11_20: 0, pos_21_100: 0,
 };
-
 const DEFAULT_BACKLINKS: BacklinkData = {
-  total_backlinks: 0,
-  referring_domains: 0,
-  dofollow: 0,
-  nofollow: 0,
-  rank: 0,
-  referring_ips: 0,
+  total_backlinks: 0, referring_domains: 0, dofollow: 0,
+  nofollow: 0, rank: 0, referring_ips: 0,
 };
-
 const DEFAULT_AI_METRICS: AIMetrics = {
-  total_mentions: 0,
-  ai_search_volume: 0,
-  question_mentions: 0,
-  answer_mentions: 0,
+  total_mentions: 0, ai_search_volume: 0,
+  question_mentions: 0, answer_mentions: 0,
 };
 
-// ── Step prompts ──────────────────────────────────────────────────────────
-function rankPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to retrieve domain rank overview data for "${domain}".
-Return ONLY a valid JSON object with these exact fields (use 0 for any unavailable value):
-{
-  "organic_count": <number of organic keywords the domain ranks for>,
-  "paid_count": <number of paid/PPC keywords>,
-  "organic_etv": <estimated monthly traffic value in USD>,
-  "organic_traffic": <estimated monthly organic visits — this is a visitor COUNT not a dollar value>,
-  "pos_1_3": <number of keywords ranking in positions 1-3>,
-  "pos_4_10": <number of keywords ranking in positions 4-10>,
-  "pos_11_20": <number of keywords ranking in positions 11-20>,
-  "pos_21_100": <number of keywords ranking in positions 21-100>
-}
-No markdown, no explanation — only the JSON object.`;
-}
-
-function backlinksPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to retrieve backlink summary data for "${domain}".
-Return ONLY a valid JSON object with these exact fields (use 0 for any unavailable value):
-{
-  "total_backlinks": <total backlink count>,
-  "referring_domains": <unique referring domains>,
-  "dofollow": <dofollow backlink count>,
-  "nofollow": <nofollow backlink count>,
-  "rank": <domain authority rank score 0-100>,
-  "referring_ips": <unique referring IP addresses>
-}
-No markdown, no explanation — only the JSON object.`;
-}
-
-function keywordsPrompt(domain: string, city?: string): string {
-  const localHint = city
-    ? ` Prioritize keywords with local intent such as "[service] in ${city}" or "[service] ${city}". Include location-specific terms where available.`
-    : "";
-  return `Use the DataForSEO MCP tools to get organic keywords for "${domain}".
-Return ONLY a valid JSON array with up to 10 items (use [] if unavailable):
-- First 6 items: top-ranking keywords ordered by search volume (positions 1-10)
-- Last 4 items: near-page-1 opportunity keywords (positions 11-20 that could be pushed to page 1 with optimization)${localHint}
-Mark the opportunity keywords with "opportunity": true. Current ranking keywords get "opportunity": false.
-[
-  {
-    "keyword": "<keyword string>",
-    "rank": <current ranking position number>,
-    "search_volume": <monthly search volume number>,
-    "cpc": <cost per click USD number>,
-    "opportunity": <true if position 11-20 near-page-1 opportunity, false otherwise>
-  }
-]
-No markdown, no explanation — only the JSON array.`;
-}
-
-function competitorsPrompt(domain: string, city?: string): string {
-  const localScope = city
-    ? ` Focus exclusively on businesses competing for the same customers in ${city} and nearby areas.`
-    : "";
-  return `Use the DataForSEO MCP tools to get the top 5 closest direct business competitors for "${domain}".${localScope}
-Return ONLY direct competitors — companies offering the same core service or product to the same target market as this domain.
-EXCLUDE without exception: job boards (indeed.com, linkedin.com, ziprecruiter.com), review aggregators (trustpilot.com, yelp.com, g2.com, glassdoor.com), social networks, national directories, news sites, Wikipedia, and any domain that does not directly sell the same product or service as this business.
-Return ONLY a valid JSON array with up to 5 items (use [] if unavailable):
-[
-  {
-    "domain": "<competitor domain>",
-    "organic_count": <number of organic keywords>,
-    "organic_etv": <estimated monthly traffic value USD number>,
-    "rank": <domain authority rank score 0-100 number>
-  }
-]
-No markdown, no explanation — only the JSON array.`;
-}
-
-function aiMetricsPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to get LLM mention aggregated metrics for "${domain}" across AI platforms.
-Return ONLY a valid JSON object with these exact fields (use 0 for any unavailable value):
-{
-  "total_mentions": <total AI mention count>,
-  "ai_search_volume": <AI search volume>,
-  "question_mentions": <mentions in question context>,
-  "answer_mentions": <mentions in answer context>
-}
-No markdown, no explanation — only the JSON object.`;
-}
-
-function aiKeywordsPrompt(domain: string): string {
-  return `Use the DataForSEO MCP tools to get the top 6 AI mention queries for "${domain}" across AI platforms.
-Return ONLY a valid JSON array with up to 6 items (use [] if unavailable):
-[
-  {
-    "keyword": "<query string>",
-    "total_count": <total mention count number>,
-    "ai_search_volume": <AI search volume number>
-  }
-]
-No markdown, no explanation — only the JSON array.`;
-}
-
-function analysisPrompt(
-  domain: string,
-  context: Partial<AuditContext>
-): string {
+// ── Analysis prompt (Claude only — no DataForSEO) ─────────────────────────
+function analysisPrompt(domain: string, context: Partial<AuditContext>): string {
   return `You are a senior digital marketing analyst. Here is the full audit data for "${domain}":
 
 ${JSON.stringify(context, null, 2)}
@@ -179,9 +82,8 @@ Return ONLY a valid JSON object with exactly these 3 fields (1-2 sentences each,
 No markdown, no explanation — only the JSON object.`;
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────
+// ── Route handler ──────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Same-origin CORS check
   const origin = req.headers.get("origin");
   const host = req.headers.get("host");
   if (origin && host) {
@@ -207,20 +109,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { domain, step, context = {}, city } = body;
+  const { domain, step, context = {} } = body;
 
   if (!domain || typeof domain !== "string") {
     return NextResponse.json({ error: "Missing or invalid domain" }, { status: 400 });
   }
 
   const validSteps: AuditStep[] = [
-    "rank",
-    "backlinks",
-    "keywords",
-    "competitors",
-    "ai_metrics",
-    "ai_keywords",
-    "analysis",
+    "rank", "backlinks", "keywords", "competitors",
+    "ai_metrics", "ai_keywords", "analysis",
   ];
   if (!validSteps.includes(step)) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
@@ -228,107 +125,236 @@ export async function POST(req: NextRequest) {
 
   try {
     let data:
-      | RankData
-      | BacklinkData
-      | KeywordItem[]
-      | CompetitorItem[]
-      | AIMetrics
-      | AIKeywordItem[]
-      | string;
+      | RankData | BacklinkData | KeywordItem[]
+      | CompetitorItem[] | AIMetrics | AIKeywordItem[] | string;
 
     switch (step) {
+      // ── STEP 1: Rank overview ─────────────────────────────────────────
       case "rank": {
-        const text = await callWithMCP(rankPrompt(domain));
-        data = safeParseJSON<RankData>(text, DEFAULT_RANK);
-        const r = data as RankData;
-        data = {
-          organic_count: r.organic_count ?? 0,
-          paid_count: r.paid_count ?? 0,
-          organic_etv: r.organic_etv ?? 0,
-          organic_traffic: r.organic_traffic ?? 0,
-          pos_1_3: r.pos_1_3 ?? 0,
-          pos_4_10: r.pos_4_10 ?? 0,
-          pos_11_20: r.pos_11_20 ?? 0,
-          pos_21_100: r.pos_21_100 ?? 0,
+        type BulkItem = {
+          target?: string;
+          metrics?: {
+            organic?: {
+              count?: number; etv?: number;
+              pos_1?: number; pos_2_3?: number;
+              pos_4_10?: number; pos_11_20?: number; pos_21_100?: number;
+            };
+            paid?: { count?: number; etv?: number };
+          };
         };
+        type BulkResult = Array<{ items?: BulkItem[] }>;
+
+        const result = await dfsPost<BulkResult>(
+          "/v3/dataforseo_labs/google/bulk_traffic_estimation/live",
+          [{ targets: [domain], location_code: 2840, language_code: "en" }]
+        );
+
+        const item = result[0]?.items?.[0];
+        const org = item?.metrics?.organic ?? {};
+        const paid = item?.metrics?.paid ?? {};
+
+        data = {
+          organic_count: org.count ?? 0,
+          paid_count: paid.count ?? 0,
+          organic_etv: org.etv ?? 0,
+          organic_traffic: 0,
+          pos_1_3: (org.pos_1 ?? 0) + (org.pos_2_3 ?? 0),
+          pos_4_10: org.pos_4_10 ?? 0,
+          pos_11_20: org.pos_11_20 ?? 0,
+          pos_21_100: org.pos_21_100 ?? 0,
+        } satisfies RankData;
         break;
       }
 
+      // ── STEP 2: Backlink profile ──────────────────────────────────────
       case "backlinks": {
-        const text = await callWithMCP(backlinksPrompt(domain));
-        data = safeParseJSON<BacklinkData>(text, DEFAULT_BACKLINKS);
-        const b = data as BacklinkData;
-        data = {
-          total_backlinks: b.total_backlinks ?? 0,
-          referring_domains: b.referring_domains ?? 0,
-          dofollow: b.dofollow ?? 0,
-          nofollow: b.nofollow ?? 0,
-          rank: b.rank ?? 0,
-          referring_ips: b.referring_ips ?? 0,
+        type BacklinksItem = {
+          rank?: number;
+          backlinks?: number;
+          referring_domains?: number;
+          referring_ips?: number;
+          referring_links_attributes?: { dofollow?: number; nofollow?: number };
         };
+        type BacklinksResult = BacklinksItem[];
+
+        const result = await dfsPost<BacklinksResult>(
+          "/v3/backlinks/summary/live",
+          [{ target: domain, include_subdomains: true }]
+        );
+
+        const r = result[0] ?? {};
+        const attrs = r.referring_links_attributes ?? {};
+        const total = r.backlinks ?? 0;
+        const nofollow = attrs.nofollow ?? 0;
+        const dofollow = attrs.dofollow ?? Math.max(0, total - nofollow);
+
+        data = {
+          total_backlinks: total,
+          referring_domains: r.referring_domains ?? 0,
+          dofollow,
+          nofollow,
+          rank: r.rank ?? 0,
+          referring_ips: r.referring_ips ?? 0,
+        } satisfies BacklinkData;
         break;
       }
 
+      // ── STEP 3: Ranked keywords ───────────────────────────────────────
       case "keywords": {
-        const text = await callWithMCP(keywordsPrompt(domain, city));
-        const raw = safeParseJSON<KeywordItem[]>(text, []);
-        data = (Array.isArray(raw) ? raw : [])
-          .slice(0, 10)
-          .map((k) => ({
-            keyword: String(k.keyword ?? ""),
-            rank: Number(k.rank ?? 0),
-            search_volume: Number(k.search_volume ?? 0),
-            cpc: Number(k.cpc ?? 0),
-            opportunity: Boolean(k.opportunity ?? false),
-          }));
-        break;
-      }
-
-      case "competitors": {
-        const text = await callWithMCP(competitorsPrompt(domain, city));
-        const raw = safeParseJSON<CompetitorItem[]>(text, []);
-        data = (Array.isArray(raw) ? raw : [])
-          .slice(0, 5)
-          .map((c) => ({
-            domain: String(c.domain ?? ""),
-            organic_count: Number(c.organic_count ?? 0),
-            organic_etv: Number(c.organic_etv ?? 0),
-            rank: Number(c.rank ?? 0),
-          }));
-        break;
-      }
-
-      case "ai_metrics": {
-        const text = await callWithMCP(aiMetricsPrompt(domain));
-        data = safeParseJSON<AIMetrics>(text, DEFAULT_AI_METRICS);
-        const m = data as AIMetrics;
-        data = {
-          total_mentions: m.total_mentions ?? 0,
-          ai_search_volume: m.ai_search_volume ?? 0,
-          question_mentions: m.question_mentions ?? 0,
-          answer_mentions: m.answer_mentions ?? 0,
+        type KwItem = {
+          keyword_data?: {
+            keyword?: string;
+            keyword_info?: { search_volume?: number; cpc?: number };
+          };
+          ranked_serp_element?: {
+            serp_item?: { rank_group?: number };
+          };
         };
+        type KwResult = Array<{ items?: KwItem[]; total_count?: number }>;
+
+        const result = await dfsPost<KwResult>(
+          "/v3/dataforseo_labs/google/ranked_keywords/live",
+          [{
+            target: domain,
+            location_code: 2840,
+            language_code: "en",
+            limit: 100,
+            filters: ["keyword_data.keyword_info.search_volume", ">", 0],
+            order_by: ["keyword_data.keyword_info.search_volume,desc"],
+          }]
+        );
+
+        const items = result[0]?.items ?? [];
+        const mapped = items
+          .map(item => {
+            const pos = item.ranked_serp_element?.serp_item?.rank_group ?? 0;
+            return {
+              keyword: item.keyword_data?.keyword ?? "",
+              rank: pos,
+              search_volume: item.keyword_data?.keyword_info?.search_volume ?? 0,
+              cpc: item.keyword_data?.keyword_info?.cpc ?? 0,
+              opportunity: pos >= 11 && pos <= 20,
+            };
+          })
+          .filter(k => k.keyword && k.rank > 0);
+
+        const top6 = mapped.filter(k => k.rank >= 1 && k.rank <= 10).slice(0, 6);
+        const opps = mapped.filter(k => k.rank >= 11 && k.rank <= 20).slice(0, 4);
+        data = [...top6, ...opps] as KeywordItem[];
         break;
       }
 
-      case "ai_keywords": {
-        const text = await callWithMCP(aiKeywordsPrompt(domain));
-        const raw = safeParseJSON<AIKeywordItem[]>(text, []);
-        data = (Array.isArray(raw) ? raw : [])
-          .slice(0, 6)
-          .map((k) => ({
-            keyword: String(k.keyword ?? ""),
-            total_count: Number(k.total_count ?? 0),
-            ai_search_volume: Number(k.ai_search_volume ?? 0),
+      // ── STEP 4: Direct competitors ────────────────────────────────────
+      case "competitors": {
+        type CompItem = {
+          domain?: string;
+          intersections?: number;
+          full_domain_metrics?: {
+            organic?: { count?: number; etv?: number };
+          };
+        };
+        type CompResult = Array<{ items?: CompItem[] }>;
+
+        const result = await dfsPost<CompResult>(
+          "/v3/dataforseo_labs/google/competitors_domain/live",
+          [{
+            target: domain,
+            location_code: 2840,
+            language_code: "en",
+            limit: 20,
+          }]
+        );
+
+        const items = result[0]?.items ?? [];
+        const lowerDomain = domain.toLowerCase();
+
+        const filtered: CompetitorItem[] = items
+          .filter(c => {
+            const d = (c.domain ?? "").toLowerCase();
+            return d && d !== lowerDomain && !COMPETITOR_BLOCKLIST.has(d);
+          })
+          .slice(0, 5)
+          .map(c => ({
+            domain: c.domain ?? "",
+            organic_count: c.full_domain_metrics?.organic?.count ?? 0,
+            organic_etv: c.full_domain_metrics?.organic?.etv ?? 0,
+            rank: 0,
           }));
+
+        data = filtered;
         break;
       }
 
-      case "analysis": {
-        data = await callWithMCP(analysisPrompt(domain, context));
-        if (!data || typeof data !== "string" || data.trim() === "") {
-          data = "Analysis could not be generated. Please retry.";
+      // ── STEP 5: AI mention metrics ────────────────────────────────────
+      case "ai_metrics": {
+        type AIMetricsResult = Array<{
+          total_mentions?: number;
+          ai_search_volume?: number;
+          question_mentions?: number;
+          answer_mentions?: number;
+        }>;
+
+        let r: AIMetricsResult[0] = {};
+        try {
+          const result = await dfsPost<AIMetricsResult>(
+            "/v3/ai_optimization/llm_mentions/aggregated_metrics/live",
+            [{ target: domain }]
+          );
+          r = result[0] ?? {};
+        } catch (err) {
+          // AI endpoints may not be available on all plans — fall through to zeros
+          console.warn("[ai_metrics] endpoint unavailable:", err instanceof Error ? err.message : err);
         }
+
+        data = {
+          total_mentions: r.total_mentions ?? 0,
+          ai_search_volume: r.ai_search_volume ?? 0,
+          question_mentions: r.question_mentions ?? 0,
+          answer_mentions: r.answer_mentions ?? 0,
+        } satisfies AIMetrics;
+        break;
+      }
+
+      // ── STEP 6: AI mention queries ────────────────────────────────────
+      case "ai_keywords": {
+        type AIKwResult = Array<{
+          items?: Array<{
+            keyword?: string;
+            total_count?: number;
+            ai_search_volume?: number;
+          }>;
+        }>;
+
+        let items: NonNullable<AIKwResult[0]["items"]> = [];
+        try {
+          const result = await dfsPost<AIKwResult>(
+            "/v3/ai_optimization/llm_mentions/search/live",
+            [{ target: domain, limit: 6, order_by: ["total_count,desc"] }]
+          );
+          items = result[0]?.items ?? [];
+        } catch (err) {
+          console.warn("[ai_keywords] endpoint unavailable:", err instanceof Error ? err.message : err);
+        }
+
+        data = items.map(k => ({
+          keyword: k.keyword ?? "",
+          total_count: k.total_count ?? 0,
+          ai_search_volume: k.ai_search_volume ?? 0,
+        })) satisfies AIKeywordItem[];
+        break;
+      }
+
+      // ── STEP 7: Analysis (Claude direct — no DataForSEO) ─────────────
+      case "analysis": {
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const response = await client.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 600,
+          messages: [{ role: "user", content: analysisPrompt(domain, context) }],
+        });
+        const textBlock = response.content.find(b => b.type === "text");
+        const text = textBlock?.type === "text" ? textBlock.text.trim() : "";
+        data = text || "Analysis could not be generated. Please retry.";
         break;
       }
     }
@@ -340,3 +366,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
