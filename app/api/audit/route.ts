@@ -15,7 +15,7 @@ import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
 const rateLimitStore = new Map<string, { count: number; reset: number }>();
-const RATE_LIMIT = 10;
+const RATE_LIMIT = 200; // 200 step-calls/hr ≈ ~28 full audits
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 function getClientIP(req: NextRequest): string {
@@ -95,7 +95,8 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIP(req);
-  if (!checkRateLimit(ip)) {
+  const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "unknown";
+  if (!isLocalhost && !checkRateLimit(ip)) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please try again in an hour." },
       { status: 429 }
