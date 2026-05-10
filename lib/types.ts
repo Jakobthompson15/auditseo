@@ -1,29 +1,20 @@
-export interface RankData {
-  organic_count: number;
-  paid_count: number;
-  organic_etv: number;
-  organic_traffic: number;
-  pos_1_3: number;
-  pos_4_10: number;
-  pos_11_20: number;
-  pos_21_100: number;
-}
-
 export interface BacklinkData {
+  rank: number;
   total_backlinks: number;
   referring_domains: number;
+  referring_ips: number;
+  referring_pages: number;
+  broken_backlinks: number;
+  broken_pages: number;
+  spam_score: number;
   dofollow: number;
   nofollow: number;
-  rank: number;
-  referring_ips: number;
-}
-
-export interface KeywordItem {
-  keyword: string;
-  rank: number;
-  search_volume: number;
-  cpc: number;
-  opportunity?: boolean;
+  ugc: number;
+  sponsored: number;
+  // link type breakdown (anchor, image, redirect, etc.)
+  link_types: Record<string, number>;
+  // semantic location breakdown (body, footer, nav, etc.)
+  link_locations: Record<string, number>;
 }
 
 export interface AIMetrics {
@@ -39,27 +30,14 @@ export interface AIKeywordItem {
   ai_search_volume: number;
 }
 
-export interface CompetitorItem {
-  domain: string;
-  organic_count: number;
-  organic_etv: number;
-  rank: number;
-}
-
 export type AuditStep =
-  | "rank"
   | "backlinks"
-  | "keywords"
-  | "competitors"
   | "ai_metrics"
   | "ai_keywords"
   | "analysis";
 
 export interface AuditContext {
-  rank: RankData;
   backlinks: BacklinkData;
-  keywords: KeywordItem[];
-  competitors: CompetitorItem[];
   ai_metrics: AIMetrics;
   ai_keywords: AIKeywordItem[];
   analysis: string;
@@ -74,13 +52,7 @@ export interface AuditRequest {
 
 export interface AuditResponse {
   step: AuditStep;
-  data:
-    | RankData
-    | BacklinkData
-    | KeywordItem[]
-    | AIMetrics
-    | AIKeywordItem[]
-    | string;
+  data: BacklinkData | AIMetrics | AIKeywordItem[] | string;
   error?: string;
 }
 

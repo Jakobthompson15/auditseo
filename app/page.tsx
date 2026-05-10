@@ -5,11 +5,8 @@ import type {
   AuditContext,
   AuditStep,
   BacklinkData,
-  CompetitorItem,
-  KeywordItem,
   AIKeywordItem,
   AIMetrics,
-  RankData,
   StepStatus,
 } from "@/lib/types";
 import {
@@ -22,27 +19,19 @@ import DomainInput from "@/components/DomainInput";
 import ProgressTracker from "@/components/ProgressTracker";
 import ScoreCard from "@/components/ScoreCard";
 import SEOSection from "@/components/SEOSection";
-import KeywordsTable from "@/components/KeywordsTable";
-import CompetitorSection from "@/components/CompetitorSection";
 import AISection from "@/components/AISection";
 import AnalysisCard from "@/components/AnalysisCard";
 import RevenueCalculator from "@/components/RevenueCalculator";
 
 const STEP_LABELS: Record<AuditStep, string> = {
-  rank: "Domain rank overview",
   backlinks: "Backlink profile",
-  keywords: "Ranked keywords",
-  competitors: "Industry competitors",
   ai_metrics: "AI mention metrics",
   ai_keywords: "AI mention queries",
   analysis: "Generating analysis",
 };
 
 const ALL_STEPS: AuditStep[] = [
-  "rank",
   "backlinks",
-  "keywords",
-  "competitors",
   "ai_metrics",
   "ai_keywords",
   "analysis",
@@ -56,24 +45,11 @@ function makeInitialSteps(): StepStatus[] {
   }));
 }
 
-const DEFAULT_RANK: RankData = {
-  organic_count: 0,
-  paid_count: 0,
-  organic_etv: 0,
-  organic_traffic: 0,
-  pos_1_3: 0,
-  pos_4_10: 0,
-  pos_11_20: 0,
-  pos_21_100: 0,
-};
-
 const DEFAULT_BACKLINKS: BacklinkData = {
-  total_backlinks: 0,
-  referring_domains: 0,
-  dofollow: 0,
-  nofollow: 0,
-  rank: 0,
-  referring_ips: 0,
+  rank: 0, total_backlinks: 0, referring_domains: 0, referring_ips: 0,
+  referring_pages: 0, broken_backlinks: 0, broken_pages: 0, spam_score: 0,
+  dofollow: 0, nofollow: 0, ugc: 0, sponsored: 0,
+  link_types: {}, link_locations: {},
 };
 
 const DEFAULT_AI_METRICS: AIMetrics = {
@@ -82,8 +58,6 @@ const DEFAULT_AI_METRICS: AIMetrics = {
   question_mentions: 0,
   answer_mentions: 0,
 };
-
-const DEFAULT_COMPETITORS: CompetitorItem[] = [];
 
 export default function Home() {
   const [rawDomain, setRawDomain] = useState("");
@@ -136,21 +110,11 @@ export default function Home() {
             return;
           }
 
-          // Type-safe step assignment
           const data = json.data;
           if (data !== undefined) {
             switch (step) {
-              case "rank":
-                context.rank = data as RankData;
-                break;
               case "backlinks":
                 context.backlinks = data as BacklinkData;
-                break;
-              case "keywords":
-                context.keywords = data as KeywordItem[];
-                break;
-              case "competitors":
-                context.competitors = data as CompetitorItem[];
                 break;
               case "ai_metrics":
                 context.ai_metrics = data as AIMetrics;
@@ -186,7 +150,7 @@ export default function Home() {
     setAuditData({});
     setSteps(makeInitialSteps());
     setHasRun(true);
-    void runFrom("rank", domain, city, {});
+    void runFrom("backlinks", domain, city, {});
   }, [rawDomain, runFrom]);
 
   const handleRetry = useCallback(
@@ -205,29 +169,21 @@ export default function Home() {
     [rawDomain, auditData, runFrom]
   );
 
-  // Derived display values — always have fallbacks
-  const rank = auditData.rank ?? DEFAULT_RANK;
+  // Derived display values
   const backlinks = auditData.backlinks ?? DEFAULT_BACKLINKS;
-  const keywords = auditData.keywords ?? [];
-  const competitors = auditData.competitors ?? DEFAULT_COMPETITORS;
   const aiMetrics = auditData.ai_metrics ?? DEFAULT_AI_METRICS;
   const aiKeywords = auditData.ai_keywords ?? [];
   const analysis = auditData.analysis ?? "";
 
-  const seoScore = auditData.rank && auditData.backlinks
-    ? computeSEOScore(rank, backlinks)
-    : 0;
+  const seoScore = auditData.backlinks ? computeSEOScore(backlinks) : 0;
   const aiScore = auditData.ai_metrics ? computeAIScore(aiMetrics) : 0;
-  const pills =
-    auditData.rank && auditData.backlinks && auditData.ai_metrics
-      ? summaryPills(rank, backlinks, aiMetrics)
-      : [];
+  const pills = auditData.backlinks && auditData.ai_metrics
+    ? summaryPills(backlinks, aiMetrics)
+    : [];
 
-  const showScores = !!(auditData.rank && auditData.backlinks);
-  const showSEO = !!(auditData.rank && auditData.backlinks);
-  const showKeywords = keywords.length > 0;
-  const showCompetitors = competitors.length > 0;
-  const showAI = !!(auditData.ai_metrics);
+  const showScores = !!auditData.backlinks;
+  const showSEO = !!auditData.backlinks;
+  const showAI = !!auditData.ai_metrics;
   const showAnalysis = !!analysis;
 
   const auditing = isRunning || hasRun;
@@ -426,20 +382,7 @@ export default function Home() {
           )}
 
           {/* SEO stats */}
-          {showSEO && <SEOSection rank={rank} backlinks={backlinks} />}
-
-          {/* Keywords */}
-          {showKeywords && <KeywordsTable keywords={keywords} />}
-
-          {/* Competitors */}
-          {showCompetitors && (
-            <CompetitorSection
-              competitors={competitors}
-              auditedDomain={sanitizeDomain(rawDomain)}
-              auditedRank={rank}
-              auditedBacklinks={backlinks}
-            />
-          )}
+          {showSEO && <SEOSection backlinks={backlinks} />}
 
           {/* AI section */}
           {showAI && (
