@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dfsPost } from "@/lib/dataforseo";
+import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
 
 export interface KeywordResearchItem {
   keyword: string;
@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
   const citySeeds = seeds.slice(0, 3).map(s => `${s} ${city}`);
   const allSeeds = [...citySeeds, ...seeds].slice(0, 8);
 
+  // City-level code for keyword research — reflects local search demand
+  const locationCode = await resolveLocationCode(city, true);
+
   try {
     type KwIdeasItem = {
       keyword?: string;
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
       "/v3/dataforseo_labs/google/keyword_ideas/live",
       [{
         keywords: allSeeds,
-        location_code: 2840,
+        location_code: locationCode,
         language_code: "en",
         limit: 50,
         order_by: ["keyword_info.search_volume,desc"],

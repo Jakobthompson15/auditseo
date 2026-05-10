@@ -11,7 +11,7 @@ import type {
   AIKeywordItem,
   AuditContext,
 } from "@/lib/types";
-import { dfsPost } from "@/lib/dataforseo";
+import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
 const rateLimitStore = new Map<string, { count: number; reset: number }>();
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { domain, step, context = {} } = body;
+  const { domain, step, context = {}, city } = body;
 
   if (!domain || typeof domain !== "string") {
     return NextResponse.json({ error: "Missing or invalid domain" }, { status: 400 });
@@ -122,6 +122,9 @@ export async function POST(req: NextRequest) {
   if (!validSteps.includes(step)) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
+
+  // Resolve location: country-level for Labs competitive analysis
+  const locationCode = await resolveLocationCode(city ?? "");
 
   try {
     let data:
@@ -146,7 +149,7 @@ export async function POST(req: NextRequest) {
 
         const result = await dfsPost<BulkResult>(
           "/v3/dataforseo_labs/google/bulk_traffic_estimation/live",
-          [{ targets: [domain], location_code: 2840, language_code: "en" }]
+          [{ targets: [domain], location_code: locationCode, language_code: "en" }]
         );
 
         const item = result[0]?.items?.[0];
@@ -216,7 +219,7 @@ export async function POST(req: NextRequest) {
           "/v3/dataforseo_labs/google/ranked_keywords/live",
           [{
             target: domain,
-            location_code: 2840,
+            location_code: locationCode,
             language_code: "en",
             limit: 100,
             filters: ["keyword_data.keyword_info.search_volume", ">", 0],
@@ -259,7 +262,7 @@ export async function POST(req: NextRequest) {
           "/v3/dataforseo_labs/google/competitors_domain/live",
           [{
             target: domain,
-            location_code: 2840,
+            location_code: locationCode,
             language_code: "en",
             limit: 20,
           }]
