@@ -13,31 +13,6 @@ import type {
 } from "@/lib/types";
 import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
 
-// ── Rate limiting ──────────────────────────────────────────────────────────
-const rateLimitStore = new Map<string, { count: number; reset: number }>();
-const RATE_LIMIT = 200; // 200 step-calls/hr ≈ ~28 full audits
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-
-function getClientIP(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitStore.get(ip);
-  if (!entry || now > entry.reset) {
-    rateLimitStore.set(ip, { count: 1, reset: now + RATE_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT) return false;
-  entry.count += 1;
-  return true;
-}
-
 // ── Competitor blocklist ───────────────────────────────────────────────────
 const COMPETITOR_BLOCKLIST = new Set([
   "indeed.com", "linkedin.com", "ziprecruiter.com", "glassdoor.com",
@@ -92,15 +67,6 @@ export async function POST(req: NextRequest) {
     if (originHost !== reqHost && originHost !== "localhost") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-  }
-
-  const ip = getClientIP(req);
-  const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "unknown";
-  if (!isLocalhost && !checkRateLimit(ip)) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded. Please try again in an hour." },
-      { status: 429 }
-    );
   }
 
   let body: AuditRequest;
