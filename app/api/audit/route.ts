@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
 
   // Resolve location: country-level for Labs competitive analysis
   const locationCode = await resolveLocationCode(city ?? "");
+  console.log(`[audit] domain=${domain} step=${step} city=${city ?? "—"} location_code=${locationCode}`);
 
   try {
     let data:
@@ -166,6 +167,7 @@ export async function POST(req: NextRequest) {
           pos_11_20: org.pos_11_20 ?? 0,
           pos_21_100: org.pos_21_100 ?? 0,
         } satisfies RankData;
+        console.log(`[rank] organic_count=${(data as RankData).organic_count} etv=${(data as RankData).organic_etv} pos_1_3=${(data as RankData).pos_1_3}`);
         break;
       }
 
@@ -199,6 +201,7 @@ export async function POST(req: NextRequest) {
           rank: r.rank ?? 0,
           referring_ips: r.referring_ips ?? 0,
         } satisfies BacklinkData;
+        console.log(`[backlinks] total=${total} domains=${(data as BacklinkData).referring_domains} rank=${(data as BacklinkData).rank} dofollow=${dofollow}`);
         break;
       }
 
@@ -244,6 +247,7 @@ export async function POST(req: NextRequest) {
         const top6 = mapped.filter(k => k.rank >= 1 && k.rank <= 10).slice(0, 6);
         const opps = mapped.filter(k => k.rank >= 11 && k.rank <= 20).slice(0, 4);
         data = [...top6, ...opps] as KeywordItem[];
+        console.log(`[keywords] total_mapped=${mapped.length} top=${top6.length} opportunities=${opps.length}`);
         break;
       }
 
@@ -285,6 +289,7 @@ export async function POST(req: NextRequest) {
           }));
 
         data = filtered;
+        console.log(`[competitors] returned=${filtered.length} domains=${filtered.map(c => c.domain).join(", ")}`);
         break;
       }
 
@@ -301,12 +306,11 @@ export async function POST(req: NextRequest) {
         try {
           const result = await dfsPost<AIMetricsResult>(
             "/v3/ai_optimization/llm_mentions/aggregated_metrics/live",
-            [{ target: domain }]
+            [{ target: [domain] }]
           );
           r = result[0] ?? {};
         } catch (err) {
-          // AI endpoints may not be available on all plans — fall through to zeros
-          console.warn("[ai_metrics] endpoint unavailable:", err instanceof Error ? err.message : err);
+          console.warn("[ai_metrics] failed:", err instanceof Error ? err.message : err);
         }
 
         data = {
@@ -315,6 +319,7 @@ export async function POST(req: NextRequest) {
           question_mentions: r.question_mentions ?? 0,
           answer_mentions: r.answer_mentions ?? 0,
         } satisfies AIMetrics;
+        console.log(`[ai_metrics] mentions=${(data as AIMetrics).total_mentions} ai_vol=${(data as AIMetrics).ai_search_volume}`);
         break;
       }
 
@@ -332,11 +337,11 @@ export async function POST(req: NextRequest) {
         try {
           const result = await dfsPost<AIKwResult>(
             "/v3/ai_optimization/llm_mentions/search/live",
-            [{ target: domain, limit: 6, order_by: ["total_count,desc"] }]
+            [{ target: [domain], limit: 6, order_by: ["total_count,desc"] }]
           );
           items = result[0]?.items ?? [];
         } catch (err) {
-          console.warn("[ai_keywords] endpoint unavailable:", err instanceof Error ? err.message : err);
+          console.warn("[ai_keywords] failed:", err instanceof Error ? err.message : err);
         }
 
         data = items.map(k => ({
@@ -344,11 +349,13 @@ export async function POST(req: NextRequest) {
           total_count: k.total_count ?? 0,
           ai_search_volume: k.ai_search_volume ?? 0,
         })) satisfies AIKeywordItem[];
+        console.log(`[ai_keywords] queries=${items.length}`);
         break;
       }
 
       // ── STEP 7: Analysis (Claude direct — no DataForSEO) ─────────────
       case "analysis": {
+        console.log(`[analysis] calling Claude for ${domain}`);
         const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
         const response = await client.messages.create({
           model: "claude-sonnet-4-20250514",
@@ -358,6 +365,7 @@ export async function POST(req: NextRequest) {
         const textBlock = response.content.find(b => b.type === "text");
         const text = textBlock?.type === "text" ? textBlock.text.trim() : "";
         data = text || "Analysis could not be generated. Please retry.";
+        console.log(`[analysis] done tokens_used=${response.usage.output_tokens}`);
         break;
       }
     }
