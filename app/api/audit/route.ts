@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         try {
           const result = await dfsPost<AIMetricsResult>(
             "/v3/ai_optimization/llm_mentions/aggregated_metrics/live",
-            [{ target: [domain] }]
+            [{ target: [{ domain }] }]
           );
           r = result[0] ?? {};
         } catch (err) {
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         try {
           const result = await dfsPost<AIKwResult>(
             "/v3/ai_optimization/llm_mentions/search/live",
-            [{ target: [domain], limit: 6, order_by: ["total_count,desc"] }]
+            [{ target: [{ domain }], limit: 6, order_by: ["total_count,desc"] }]
           );
           items = result[0]?.items ?? [];
         } catch (err) {
