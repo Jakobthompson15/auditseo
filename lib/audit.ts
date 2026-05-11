@@ -1,4 +1,4 @@
-import type { BacklinkData, AIMetrics } from "./types";
+import type { AIMetrics } from "./types";
 
 export function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -8,30 +8,6 @@ export function fmt(n: number): string {
 
 export function fmtCpc(n: number): string {
   return `$${n.toFixed(2)}`;
-}
-
-export function computeSEOScore(backlinks: BacklinkData): number {
-  // Domain authority rank (40 pts) — DataForSEO 0–100 scale
-  const daScore = (backlinks.rank / 100) * 40;
-
-  // Referring domains (30 pts) — log scale; 10,000 RDs = full score
-  const rdScore =
-    backlinks.referring_domains > 0
-      ? Math.min(30, (Math.log10(backlinks.referring_domains) / Math.log10(10000)) * 30)
-      : 0;
-
-  // Dofollow quality ratio (20 pts)
-  const total = backlinks.total_backlinks || 1;
-  const dfRatio = backlinks.dofollow / total;
-  const dfScore =
-    backlinks.dofollow > 0
-      ? dfRatio >= 0.7 ? 20 : dfRatio >= 0.5 ? 15 : dfRatio >= 0.3 ? 10 : 5
-      : 0;
-
-  // Spam score (10 pts) — inverse; lower spam = better
-  const spamScore = Math.max(0, 10 - (backlinks.spam_score / 100) * 10);
-
-  return Math.min(100, Math.max(0, Math.round(daScore + rdScore + dfScore + spamScore)));
 }
 
 export function computeAIScore(metrics: AIMetrics): number {
@@ -58,17 +34,14 @@ export function computeAIScore(metrics: AIMetrics): number {
   return Math.min(100, Math.max(0, Math.round(mentionScore + volumeScore + ratioScore)));
 }
 
-export function summaryPills(backlinks: BacklinkData, metrics: AIMetrics): string[] {
+export function summaryPills(metrics: AIMetrics): string[] {
   const pills: string[] = [];
-  if (backlinks.rank >= 70) pills.push("High Domain Authority");
-  else if (backlinks.rank >= 40) pills.push("Growing Domain Authority");
-  if (backlinks.referring_domains >= 500) pills.push("Strong Backlink Profile");
-  const dfRatio = backlinks.dofollow / (backlinks.total_backlinks || 1);
-  if (backlinks.dofollow > 0 && dfRatio > 0.6) pills.push("Quality Link Profile");
-  if (backlinks.spam_score < 20) pills.push("Low Spam Score");
   if (metrics.total_mentions >= 100) pills.push("AI-Visible Brand");
   if (metrics.total_mentions < 10) pills.push("Grow AI Mentions");
   if (metrics.answer_mentions > metrics.question_mentions) pills.push("Authority in AI Answers");
+  if (metrics.ai_search_volume >= 1000) pills.push("High AI Search Volume");
+  const totalCtx = metrics.question_mentions + metrics.answer_mentions;
+  if (totalCtx > 0 && metrics.answer_mentions / totalCtx >= 0.7) pills.push("Strong Answer Presence");
   return pills.slice(0, 5);
 }
 

@@ -3,20 +3,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   AuditRequest,
   AuditStep,
-  BacklinkData,
   AIMetrics,
   AIKeywordItem,
+  KeywordOpportunity,
+  CompetitorDomain,
   AuditContext,
 } from "@/lib/types";
-import { dfsPost } from "@/lib/dataforseo";
-
-// ── Defaults ───────────────────────────────────────────────────────────────
-const DEFAULT_BACKLINKS: BacklinkData = {
-  rank: 0, total_backlinks: 0, referring_domains: 0, referring_ips: 0,
-  referring_pages: 0, broken_backlinks: 0, broken_pages: 0, spam_score: 0,
-  dofollow: 0, nofollow: 0, ugc: 0, sponsored: 0,
-  link_types: {}, link_locations: {},
-};
+import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
 
 // ── Analysis prompt ────────────────────────────────────────────────────────
 function analysisPrompt(domain: string, context: Partial<AuditContext>): string {
@@ -26,9 +19,9 @@ ${JSON.stringify(context, null, 2)}
 
 Return ONLY a valid JSON object with exactly these 3 fields (1-2 sentences each, no markdown):
 {
-  "seo": "<assess backlink authority — cite rank, referring domains, dofollow ratio, spam score>",
+  "seo": "<assess organic search presence — cite top keyword opportunities, search volume, difficulty, and any quick-win positions 11-20>",
   "ai": "<evaluate AI/LLM visibility — cite total mentions, AI search volume, answer vs question ratio>",
-  "recommendation": "<one concrete strategic recommendation tailored to this domain's specific strengths and gaps>"
+  "recommendation": "<one concrete strategic recommendation based on the keyword gaps and AI visibility data for this specific domain>"
 }
 No markdown, no explanation — only the JSON object.`;
 }
@@ -58,72 +51,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing or invalid domain" }, { status: 400 });
   }
 
-  const validSteps: AuditStep[] = ["backlinks", "ai_metrics", "ai_keywords", "analysis"];
+  const validSteps: AuditStep[] = ["ai_metrics", "ai_keywords", "keywords", "competitors", "analysis"];
   if (!validSteps.includes(step)) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
 
   console.log(`[audit] domain=${domain} step=${step}`);
 
+  const city = body.city ?? "";
+
   try {
-    let data: BacklinkData | AIMetrics | AIKeywordItem[] | string;
+    let data: AIMetrics | AIKeywordItem[] | KeywordOpportunity[] | CompetitorDomain[] | string;
 
     switch (step) {
-      // ── STEP 1: Backlink profile ──────────────────────────────────────
-      case "backlinks": {
-        type BacklinksItem = {
-          rank?: number;
-          backlinks?: number;
-          referring_domains?: number;
-          referring_ips?: number;
-          referring_pages?: number;
-          broken_backlinks?: number;
-          broken_pages?: number;
-          backlinks_spam_score?: number;
-          referring_links_attributes?: {
-            dofollow?: number;
-            nofollow?: number;
-            ugc?: number;
-            sponsored?: number;
-          };
-          referring_links_types?: Record<string, number>;
-          referring_links_semantic_locations?: Record<string, number>;
-        };
-        type BacklinksResult = BacklinksItem[];
-
-        const result = await dfsPost<BacklinksResult>(
-          "/v3/backlinks/summary/live",
-          [{ target: domain, include_subdomains: true }]
-        );
-
-        const r = result[0] ?? {};
-        const attrs = r.referring_links_attributes ?? {};
-        const total = r.backlinks ?? 0;
-        const nofollow = attrs.nofollow ?? 0;
-        const dofollow = attrs.dofollow ?? Math.max(0, total - nofollow);
-
-        data = {
-          rank: r.rank ?? 0,
-          total_backlinks: total,
-          referring_domains: r.referring_domains ?? 0,
-          referring_ips: r.referring_ips ?? 0,
-          referring_pages: r.referring_pages ?? 0,
-          broken_backlinks: r.broken_backlinks ?? 0,
-          broken_pages: r.broken_pages ?? 0,
-          spam_score: r.backlinks_spam_score ?? 0,
-          dofollow,
-          nofollow,
-          ugc: attrs.ugc ?? 0,
-          sponsored: attrs.sponsored ?? 0,
-          link_types: r.referring_links_types ?? {},
-          link_locations: r.referring_links_semantic_locations ?? {},
-        } satisfies BacklinkData;
-
-        console.log(`[backlinks] rank=${(data as BacklinkData).rank} domains=${(data as BacklinkData).referring_domains} total=${total} dofollow=${dofollow} spam=${(data as BacklinkData).spam_score}`);
-        break;
-      }
-
-      // ── STEP 2: AI mention metrics ────────────────────────────────────
+      // ── STEP 1: AI mention metrics ────────────────────────────────────
       case "ai_metrics": {
         type AIMetricsResult = Array<{
           total_mentions?: number;
@@ -153,7 +94,7 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // ── STEP 3: AI mention queries ────────────────────────────────────
+      // ── STEP 2: AI mention queries ────────────────────────────────────
       case "ai_keywords": {
         type AIKwResult = Array<{
           items?: Array<{
@@ -183,7 +124,114 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // ── STEP 4: Analysis (Claude — no DataForSEO) ─────────────────────
+      // ── STEP 3: SERP keyword opportunities (Labs) ────────────────────
+      case "keywords": {
+        type KwForSiteResult = Array<{
+          items?: Array<{
+            keyword_data?: {
+              keyword?: string;
+              keyword_info?: { search_volume?: number; cpc?: number };
+              keyword_properties?: { keyword_difficulty?: number };
+              search_intent_info?: { main_intent?: string };
+            };
+            ranked_serp_element?: { serp_item?: { rank_group?: number } };
+          }>;
+        }>;
+
+        let items: NonNullable<KwForSiteResult[0]["items"]> = [];
+        try {
+          const locationCode = await resolveLocationCode(city);
+          const result = await dfsPost<KwForSiteResult>(
+            "/v3/dataforseo_labs/google/keywords_for_site/live",
+            [{
+              target: domain,
+              location_code: locationCode,
+              language_code: "en",
+              include_serp_info: true,
+              include_subdomains: true,
+              limit: 50,
+            }]
+          );
+          items = result[0]?.items ?? [];
+        } catch (err) {
+          console.warn("[keywords] failed:", err instanceof Error ? err.message : err);
+        }
+
+        // Compute opportunity scores and sort
+        const scored = items.map(item => {
+          const kd = item.keyword_data ?? {};
+          const info = kd.keyword_info ?? {};
+          const vol = info.search_volume ?? 0;
+          const cpc = info.cpc ?? 0;
+          const diff = kd.keyword_properties?.keyword_difficulty ?? 50;
+          const intent = kd.search_intent_info?.main_intent ?? "informational";
+          const pos = item.ranked_serp_element?.serp_item?.rank_group;
+
+          let score = vol / (diff + 1);
+          if (intent === "commercial" || intent === "transactional") score *= 1.5;
+          if (pos !== undefined && pos >= 11 && pos <= 20) score *= 2;
+          else if (pos !== undefined && pos >= 21 && pos <= 50) score *= 1.5;
+
+          return {
+            keyword: kd.keyword ?? "",
+            search_volume: vol,
+            cpc,
+            keyword_difficulty: diff,
+            intent,
+            opportunity_score: Math.round(score),
+            rank_position: pos,
+          } satisfies KeywordOpportunity;
+        });
+
+        scored.sort((a, b) => b.opportunity_score - a.opportunity_score);
+        data = scored.slice(0, 12);
+        console.log(`[keywords] total=${items.length} returned=${(data as KeywordOpportunity[]).length}`);
+        break;
+      }
+
+      // ── STEP 4: Competitor domains (Labs) ────────────────────────────
+      case "competitors": {
+        type CompetitorsResult = Array<{
+          items?: Array<{
+            domain?: string;
+            avg_position?: number;
+            sum_position?: number;
+            intersections?: number;
+            full_domain_metrics?: {
+              organic?: { etv?: number; keywords_count?: number };
+            };
+          }>;
+        }>;
+
+        let items: NonNullable<CompetitorsResult[0]["items"]> = [];
+        try {
+          const locationCode = await resolveLocationCode(city);
+          const result = await dfsPost<CompetitorsResult>(
+            "/v3/dataforseo_labs/google/competitors_domain/live",
+            [{
+              target: domain,
+              location_code: locationCode,
+              language_code: "en",
+              limit: 8,
+            }]
+          );
+          items = result[0]?.items ?? [];
+        } catch (err) {
+          console.warn("[competitors] failed:", err instanceof Error ? err.message : err);
+        }
+
+        data = items.map(c => ({
+          domain: c.domain ?? "",
+          avg_position: Math.round((c.avg_position ?? 0) * 10) / 10,
+          intersections: c.intersections ?? 0,
+          etv: c.full_domain_metrics?.organic?.etv ?? 0,
+          keywords_count: c.full_domain_metrics?.organic?.keywords_count ?? 0,
+        })) satisfies CompetitorDomain[];
+        console.log(`[competitors] count=${(data as CompetitorDomain[]).length}`);
+        break;
+      }
+
+      // ── STEP 5: Analysis (Claude) ─────────────────────────────────────
       case "analysis": {
         console.log(`[analysis] calling Claude for ${domain}`);
         const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

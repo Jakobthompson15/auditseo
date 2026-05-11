@@ -4,36 +4,39 @@ import { useCallback, useState } from "react";
 import type {
   AuditContext,
   AuditStep,
-  BacklinkData,
   AIKeywordItem,
   AIMetrics,
+  KeywordOpportunity,
+  CompetitorDomain,
   StepStatus,
 } from "@/lib/types";
 import {
   computeAIScore,
-  computeSEOScore,
   sanitizeDomain,
   summaryPills,
 } from "@/lib/audit";
 import DomainInput from "@/components/DomainInput";
 import ProgressTracker from "@/components/ProgressTracker";
 import ScoreCard from "@/components/ScoreCard";
-import SEOSection from "@/components/SEOSection";
 import AISection from "@/components/AISection";
+import KeywordsSection from "@/components/KeywordsSection";
+import CompetitorsSection from "@/components/CompetitorsSection";
 import AnalysisCard from "@/components/AnalysisCard";
 import RevenueCalculator from "@/components/RevenueCalculator";
 
 const STEP_LABELS: Record<AuditStep, string> = {
-  backlinks: "Backlink profile",
   ai_metrics: "AI mention metrics",
   ai_keywords: "AI mention queries",
+  keywords: "SERP keyword opportunities",
+  competitors: "Competitor analysis",
   analysis: "Generating analysis",
 };
 
 const ALL_STEPS: AuditStep[] = [
-  "backlinks",
   "ai_metrics",
   "ai_keywords",
+  "keywords",
+  "competitors",
   "analysis",
 ];
 
@@ -44,13 +47,6 @@ function makeInitialSteps(): StepStatus[] {
     status: "pending",
   }));
 }
-
-const DEFAULT_BACKLINKS: BacklinkData = {
-  rank: 0, total_backlinks: 0, referring_domains: 0, referring_ips: 0,
-  referring_pages: 0, broken_backlinks: 0, broken_pages: 0, spam_score: 0,
-  dofollow: 0, nofollow: 0, ugc: 0, sponsored: 0,
-  link_types: {}, link_locations: {},
-};
 
 const DEFAULT_AI_METRICS: AIMetrics = {
   total_mentions: 0,
@@ -113,14 +109,17 @@ export default function Home() {
           const data = json.data;
           if (data !== undefined) {
             switch (step) {
-              case "backlinks":
-                context.backlinks = data as BacklinkData;
-                break;
               case "ai_metrics":
                 context.ai_metrics = data as AIMetrics;
                 break;
               case "ai_keywords":
                 context.ai_keywords = data as AIKeywordItem[];
+                break;
+              case "keywords":
+                context.keywords = data as KeywordOpportunity[];
+                break;
+              case "competitors":
+                context.competitors = data as CompetitorDomain[];
                 break;
               case "analysis":
                 context.analysis = data as string;
@@ -150,7 +149,7 @@ export default function Home() {
     setAuditData({});
     setSteps(makeInitialSteps());
     setHasRun(true);
-    void runFrom("backlinks", domain, city, {});
+    void runFrom("ai_metrics", domain, city, {});
   }, [rawDomain, runFrom]);
 
   const handleRetry = useCallback(
@@ -170,20 +169,19 @@ export default function Home() {
   );
 
   // Derived display values
-  const backlinks = auditData.backlinks ?? DEFAULT_BACKLINKS;
   const aiMetrics = auditData.ai_metrics ?? DEFAULT_AI_METRICS;
   const aiKeywords = auditData.ai_keywords ?? [];
+  const keywords = auditData.keywords ?? [];
+  const competitors = auditData.competitors ?? [];
   const analysis = auditData.analysis ?? "";
 
-  const seoScore = auditData.backlinks ? computeSEOScore(backlinks) : 0;
   const aiScore = auditData.ai_metrics ? computeAIScore(aiMetrics) : 0;
-  const pills = auditData.backlinks && auditData.ai_metrics
-    ? summaryPills(backlinks, aiMetrics)
-    : [];
+  const pills = auditData.ai_metrics ? summaryPills(aiMetrics) : [];
 
-  const showScores = !!auditData.backlinks;
-  const showSEO = !!auditData.backlinks;
+  const showScores = !!auditData.ai_metrics;
   const showAI = !!auditData.ai_metrics;
+  const showKeywords = keywords.length > 0;
+  const showCompetitors = competitors.length > 0;
   const showAnalysis = !!analysis;
 
   const auditing = isRunning || hasRun;
@@ -358,36 +356,32 @@ export default function Home() {
       {/* Report */}
       {auditing && (
         <div style={{ marginTop: "2rem" }} id="audit-report">
-          {/* Score cards */}
+          {/* Score card */}
           {showScores && (
             <div
               className="scores-row"
               style={{ display: "flex", gap: "1rem", marginBottom: "0" }}
             >
               <ScoreCard
-                label="SEO Score"
-                score={seoScore}
-                accent="var(--seo)"
-                accentDim="rgba(79,235,180,0.15)"
-                sublabel="Authority"
-              />
-              <ScoreCard
-                label="AI Score"
+                label="AI Visibility Score"
                 score={aiScore}
                 accent="var(--ai)"
                 accentDim="rgba(31,120,255,0.15)"
-                sublabel="LLM Visibility"
+                sublabel="LLM Presence"
               />
             </div>
           )}
-
-          {/* SEO stats */}
-          {showSEO && <SEOSection backlinks={backlinks} />}
 
           {/* AI section */}
           {showAI && (
             <AISection metrics={aiMetrics} aiKeywords={aiKeywords} />
           )}
+
+          {/* SERP keywords */}
+          {showKeywords && <KeywordsSection keywords={keywords} />}
+
+          {/* Competitors */}
+          {showCompetitors && <CompetitorsSection competitors={competitors} />}
 
           {/* Analysis */}
           {showAnalysis && (

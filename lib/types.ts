@@ -1,22 +1,3 @@
-export interface BacklinkData {
-  rank: number;
-  total_backlinks: number;
-  referring_domains: number;
-  referring_ips: number;
-  referring_pages: number;
-  broken_backlinks: number;
-  broken_pages: number;
-  spam_score: number;
-  dofollow: number;
-  nofollow: number;
-  ugc: number;
-  sponsored: number;
-  // link type breakdown (anchor, image, redirect, etc.)
-  link_types: Record<string, number>;
-  // semantic location breakdown (body, footer, nav, etc.)
-  link_locations: Record<string, number>;
-}
-
 export interface AIMetrics {
   total_mentions: number;
   ai_search_volume: number;
@@ -30,16 +11,31 @@ export interface AIKeywordItem {
   ai_search_volume: number;
 }
 
-export type AuditStep =
-  | "backlinks"
-  | "ai_metrics"
-  | "ai_keywords"
-  | "analysis";
+export interface KeywordOpportunity {
+  keyword: string;
+  search_volume: number;
+  cpc: number;
+  keyword_difficulty: number;
+  intent: string;
+  opportunity_score: number;
+  rank_position?: number;
+}
+
+export interface CompetitorDomain {
+  domain: string;
+  avg_position: number;
+  intersections: number;
+  etv: number;
+  keywords_count: number;
+}
+
+export type AuditStep = "ai_metrics" | "ai_keywords" | "keywords" | "competitors" | "analysis";
 
 export interface AuditContext {
-  backlinks: BacklinkData;
   ai_metrics: AIMetrics;
   ai_keywords: AIKeywordItem[];
+  keywords: KeywordOpportunity[];
+  competitors: CompetitorDomain[];
   analysis: string;
 }
 
@@ -52,7 +48,7 @@ export interface AuditRequest {
 
 export interface AuditResponse {
   step: AuditStep;
-  data: BacklinkData | AIMetrics | AIKeywordItem[] | string;
+  data: AIMetrics | AIKeywordItem[] | KeywordOpportunity[] | CompetitorDomain[] | string;
   error?: string;
 }
 
