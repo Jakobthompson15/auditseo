@@ -39,7 +39,7 @@ function KwChip({ keyword, volume }: { keyword: string; volume: number }) {
 
 export default function RevenueCalculator({ rankedKeywords, opportunityKeywords, city }: Props) {
   const [ticketSize, setTicketSize] = useState(3000);
-  const [closeRate, setCloseRate] = useState(20);
+  const [closeRate, setCloseRate] = useState(2);
 
   // Use top 3 keywords by search volume for each plan
   const top3Ranked = [...rankedKeywords].sort((a, b) => b.search_volume - a.search_volume).slice(0, 3);
@@ -146,7 +146,7 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
           </div>
         </div>
         <div>
-          <label style={labelStyle}>Close Rate</label>
+          <label style={labelStyle}>Visitor → Client %</label>
           <div style={{ position: "relative" }}>
             <input type="number" min={1} max={100} value={closeRate} onChange={(e) => setCloseRate(Math.min(100, Math.max(1, Number(e.target.value))))} style={{ ...inputStyle, paddingRight: "1.6rem" }} />
             <span style={{ position: "absolute", right: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>%</span>
@@ -230,8 +230,8 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
 
       <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
         Based on top 3 keywords by search volume from this audit.
-        Silver: {fmt(rankedVolume)}/mo ranked · Gold: {fmt(opportunityVolume)}/mo opportunity · Platinum: {fmt(combinedVolume)}/mo combined.
-        CTR benchmarks: Top 3 = {(CTR_TOP3 * 100).toFixed(0)}%, Rank #1 = {(CTR_TOP1 * 100).toFixed(0)}%. Actual results vary.
+        CTR benchmarks: Top 3 = {(CTR_TOP3 * 100).toFixed(0)}%, Rank #1 = {(CTR_TOP1 * 100).toFixed(0)}% (Backlinko).
+        Industry avg visitor-to-client rate: 0.2–2% for local home services. Actual results vary.
       </p>
     </div>
   );
