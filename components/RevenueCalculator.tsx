@@ -91,9 +91,13 @@ const labelStyle: React.CSSProperties = {
 };
 
 export default function RevenueCalculator({ rankedKeywords, keywordsForSite, city }: Props) {
-  const [jobValue, setJobValue] = useState(3000);
-  const [closeRate, setCloseRate] = useState(0.5);
-  const [monthlyInvestment, setMonthlyInvestment] = useState(1299);
+  const [jobValueStr, setJobValueStr] = useState("3000");
+  const [closeRateStr, setCloseRateStr] = useState("0.5");
+  const [monthlyInvestmentStr, setMonthlyInvestmentStr] = useState("1299");
+
+  const jobValue = Math.max(1, Number(jobValueStr) || 1);
+  const closeRate = Math.min(100, Math.max(0.1, Number(closeRateStr) || 0.1));
+  const monthlyInvestment = Math.max(1, Number(monthlyInvestmentStr) || 1);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [visibleCount, setVisibleCount] = useState(3);
 
@@ -163,8 +167,9 @@ export default function RevenueCalculator({ rankedKeywords, keywordsForSite, cit
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
             <input
-              type="number" min={100} value={jobValue}
-              onChange={(e) => setJobValue(Math.max(1, Number(e.target.value)))}
+              type="text" inputMode="numeric" value={jobValueStr}
+              onChange={(e) => setJobValueStr(e.target.value)}
+              onBlur={(e) => setJobValueStr(String(Math.max(1, Number(e.target.value) || 1)))}
               style={{ ...inputStyle, paddingLeft: "1.4rem" }}
             />
           </div>
@@ -173,8 +178,9 @@ export default function RevenueCalculator({ rankedKeywords, keywordsForSite, cit
           <label style={labelStyle}>Visitor → Client %</label>
           <div style={{ position: "relative" }}>
             <input
-              type="number" min={0.1} max={100} step={0.1} value={closeRate}
-              onChange={(e) => setCloseRate(Math.min(100, Math.max(0.1, Number(e.target.value))))}
+              type="text" inputMode="decimal" value={closeRateStr}
+              onChange={(e) => setCloseRateStr(e.target.value)}
+              onBlur={(e) => setCloseRateStr(String(Math.min(100, Math.max(0.1, Number(e.target.value) || 0.1))))}
               style={{ ...inputStyle, paddingRight: "1.6rem" }}
             />
             <span style={{ position: "absolute", right: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>%</span>
@@ -185,8 +191,9 @@ export default function RevenueCalculator({ rankedKeywords, keywordsForSite, cit
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
             <input
-              type="number" min={100} value={monthlyInvestment}
-              onChange={(e) => setMonthlyInvestment(Math.max(1, Number(e.target.value)))}
+              type="text" inputMode="numeric" value={monthlyInvestmentStr}
+              onChange={(e) => setMonthlyInvestmentStr(e.target.value)}
+              onBlur={(e) => setMonthlyInvestmentStr(String(Math.max(1, Number(e.target.value) || 1)))}
               style={{ ...inputStyle, paddingLeft: "1.4rem" }}
             />
           </div>
