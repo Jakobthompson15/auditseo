@@ -51,7 +51,13 @@ export default function KeywordsSection({ keywords }: Props) {
         <span className="section-title" style={{ color: "var(--purple)" }}>Keyword Opportunities</span>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      {keywords.length === 0 && (
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          No keyword data returned for this domain.
+        </p>
+      )}
+
+      {keywords.length > 0 && <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
@@ -104,11 +110,13 @@ export default function KeywordsSection({ keywords }: Props) {
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
 
-      <p style={{ marginTop: "0.875rem", fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-        Diff = keyword difficulty (0–100). Pos = current ranking position. Positions 11–20 are highlighted as quick-win opportunities.
-      </p>
+      {keywords.length > 0 && (
+        <p style={{ marginTop: "0.875rem", fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+          Diff = keyword difficulty (0–100). Pos = current ranking position. Positions 11–20 are highlighted as quick-win opportunities.
+        </p>
+      )}
     </div>
   );
 }

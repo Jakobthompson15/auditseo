@@ -178,10 +178,12 @@ export default function Home() {
   const aiScore = auditData.ai_metrics ? computeAIScore(aiMetrics) : 0;
   const pills = auditData.ai_metrics ? summaryPills(aiMetrics) : [];
 
+  const stepStatus = (id: AuditStep) => steps.find(s => s.id === id)?.status;
+
   const showScores = !!auditData.ai_metrics;
   const showAI = !!auditData.ai_metrics;
-  const showKeywords = keywords.length > 0;
-  const showCompetitors = competitors.length > 0;
+  const showKeywords = stepStatus("keywords") === "done";
+  const showCompetitors = stepStatus("competitors") === "done";
   const showAnalysis = !!analysis;
 
   const auditing = isRunning || hasRun;

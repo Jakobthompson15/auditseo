@@ -17,7 +17,13 @@ export default function CompetitorsSection({ competitors }: Props) {
         <span className="section-title" style={{ color: "var(--error)" }}>Organic Competitors</span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+      {competitors.length === 0 && (
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          No competitor data returned for this domain.
+        </p>
+      )}
+
+      {competitors.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         {competitors.map((c, i) => {
           const etvPct = Math.round((c.etv / maxEtv) * 100);
           return (
@@ -49,11 +55,13 @@ export default function CompetitorsSection({ competitors }: Props) {
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      <p style={{ marginTop: "0.875rem", fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-        Shared kws = keywords both domains rank for. Bar = estimated monthly traffic value.
-      </p>
+      {competitors.length > 0 && (
+        <p style={{ marginTop: "0.875rem", fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+          Shared kws = keywords both domains rank for. Bar = estimated monthly traffic value.
+        </p>
+      )}
     </div>
   );
 }
