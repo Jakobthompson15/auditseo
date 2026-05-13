@@ -58,10 +58,15 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
 
   const cvr = INDUSTRY_CVR[industry] ?? 0.025;
 
-  // Volumes derived from actual audit keyword data
-  const rankedVolume = rankedKeywords.reduce((s, k) => s + k.search_volume, 0);
-  const opportunityVolume = opportunityKeywords.reduce((s, k) => s + k.search_volume, 0);
-  const combinedVolume = rankedVolume + opportunityVolume;
+  // Use top 3 keywords by search volume for each plan
+  const top3Ranked = [...rankedKeywords].sort((a, b) => b.search_volume - a.search_volume).slice(0, 3);
+  const top3Opportunity = [...opportunityKeywords].sort((a, b) => b.search_volume - a.search_volume).slice(0, 3);
+  const top3Combined = [...rankedKeywords, ...opportunityKeywords]
+    .sort((a, b) => b.search_volume - a.search_volume).slice(0, 3);
+
+  const rankedVolume = top3Ranked.reduce((s, k) => s + k.search_volume, 0);
+  const opportunityVolume = top3Opportunity.reduce((s, k) => s + k.search_volume, 0);
+  const combinedVolume = top3Combined.reduce((s, k) => s + k.search_volume, 0);
 
   const hasData = rankedVolume > 0 || opportunityVolume > 0;
 
@@ -72,8 +77,8 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       baseVolume: rankedVolume,
       ctr: CTR_TOP3,
       positionLabel: "Current kws → Top 3",
-      description: `Top 3 on ${rankedKeywords.length} ranking keywords`,
-      keywords: rankedKeywords.slice(0, 5),
+      description: `Top 3 positions on top 3 ranked keywords`,
+      keywords: top3Ranked,
       color: "#8B9AAD",
       colorDim: "rgba(139,154,173,0.08)",
       featured: false,
@@ -84,8 +89,8 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       baseVolume: opportunityVolume,
       ctr: CTR_TOP1,
       positionLabel: "Opportunity kws → #1",
-      description: `Rank #1 on ${opportunityKeywords.length} opportunity keywords`,
-      keywords: opportunityKeywords.slice(0, 5),
+      description: `Rank #1 on top 3 opportunity keywords`,
+      keywords: top3Opportunity,
       color: "var(--purple)",
       colorDim: "rgba(31,120,255,0.12)",
       featured: true,
@@ -96,8 +101,8 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       baseVolume: combinedVolume,
       ctr: CTR_TOP1,
       positionLabel: "Full domination",
-      description: `#1 across all ${rankedKeywords.length + opportunityKeywords.length} keywords`,
-      keywords: [...rankedKeywords, ...opportunityKeywords].slice(0, 5),
+      description: `Rank #1 across top 3 highest-volume keywords`,
+      keywords: top3Combined,
       color: "#38bdf8",
       colorDim: "rgba(56,189,248,0.08)",
       featured: false,
@@ -248,8 +253,8 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       </div>
 
       <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-        Based on actual keyword data from this audit.
-        Silver uses {fmt(rankedVolume)} ranked searches · Gold uses {fmt(opportunityVolume)} opportunity searches · Platinum uses {fmt(combinedVolume)} combined.
+        Based on top 3 keywords by search volume from this audit.
+        Silver: {fmt(rankedVolume)}/mo ranked · Gold: {fmt(opportunityVolume)}/mo opportunity · Platinum: {fmt(combinedVolume)}/mo combined.
         CTR benchmarks: Top 3 = {(CTR_TOP3 * 100).toFixed(0)}%, Rank #1 = {(CTR_TOP1 * 100).toFixed(0)}%. Actual results vary.
       </p>
     </div>
