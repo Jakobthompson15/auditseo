@@ -108,9 +108,11 @@ export async function POST(req: NextRequest) {
         try {
           const result = await dfsPost<AIKwResult>(
             "/v3/ai_optimization/llm_mentions/search/live",
-            [{ target: [{ domain }], limit: 6, order_by: ["total_count,desc"] }]
+            [{ target: [{ domain }], limit: 20 }]
           );
-          items = result[0]?.items ?? [];
+          items = (result[0]?.items ?? [])
+            .sort((a, b) => (b.total_count ?? 0) - (a.total_count ?? 0))
+            .slice(0, 6);
         } catch (err) {
           console.warn("[ai_keywords] failed:", err instanceof Error ? err.message : err);
         }
