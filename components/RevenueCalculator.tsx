@@ -7,20 +7,6 @@ import type { RankedKeyword, OpportunityKeyword } from "@/lib/types";
 const CTR_TOP3 = 0.110;
 const CTR_TOP1 = 0.276;
 
-const INDUSTRY_CVR: Record<string, number> = {
-  "Local Services":           0.030,
-  "Home Improvement":         0.025,
-  "Legal & Professional":     0.020,
-  "Healthcare":               0.020,
-  "Real Estate":              0.015,
-  "Financial Services":       0.015,
-  "Restaurant & Hospitality": 0.040,
-  "E-commerce":               0.025,
-  "Technology":               0.020,
-  "Marketing & Advertising":  0.020,
-};
-
-const INDUSTRIES = Object.keys(INDUSTRY_CVR);
 
 interface Props {
   rankedKeywords: RankedKeyword[];
@@ -52,11 +38,8 @@ function KwChip({ keyword, volume }: { keyword: string; volume: number }) {
 }
 
 export default function RevenueCalculator({ rankedKeywords, opportunityKeywords, city }: Props) {
-  const [industry, setIndustry] = useState("Local Services");
   const [ticketSize, setTicketSize] = useState(3000);
   const [closeRate, setCloseRate] = useState(20);
-
-  const cvr = INDUSTRY_CVR[industry] ?? 0.025;
 
   // Use top 3 keywords by search volume for each plan
   const top3Ranked = [...rankedKeywords].sort((a, b) => b.search_volume - a.search_volume).slice(0, 3);
@@ -156,12 +139,6 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       {/* Inputs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.875rem", marginBottom: "1.75rem" }}>
         <div>
-          <label style={labelStyle}>Industry</label>
-          <select value={industry} onChange={(e) => setIndustry(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
-            {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
-          </select>
-        </div>
-        <div>
           <label style={labelStyle}>Avg. Ticket Size</label>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: "0.7rem", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-muted)", pointerEvents: "none" }}>$</span>
@@ -181,8 +158,7 @@ export default function RevenueCalculator({ rankedKeywords, opportunityKeywords,
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }} className="calculator-grid">
         {PACKAGES.map((pkg) => {
           const visitors = Math.round(pkg.baseVolume * pkg.ctr);
-          const leads = visitors * cvr;
-          const clients = leads * (closeRate / 100);
+          const clients = visitors * (closeRate / 100);
           const monthlyRev = clients * ticketSize;
           const sixMonthRev = monthlyRev * 6;
           const sixMonthCost = pkg.price * 6;
