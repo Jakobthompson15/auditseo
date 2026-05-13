@@ -1,24 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { fmt } from "@/lib/audit";
-import type { KeywordResearchResponse } from "@/app/api/keywords/route";
+import type { RankedKeyword, OpportunityKeyword } from "@/lib/types";
 
 const CTR_TOP3 = 0.110;
 const CTR_TOP1 = 0.276;
-
-const FALLBACK_VOLUME: Record<string, number> = {
-  "Local Services":           2400,
-  "Home Improvement":         3600,
-  "Legal & Professional":     1800,
-  "Healthcare":               2200,
-  "Real Estate":              4400,
-  "Financial Services":       1600,
-  "Restaurant & Hospitality": 5400,
-  "E-commerce":               6600,
-  "Technology":               2000,
-  "Marketing & Advertising":  1200,
-};
 
 const INDUSTRY_CVR: Record<string, number> = {
   "Local Services":           0.030,
@@ -35,40 +22,9 @@ const INDUSTRY_CVR: Record<string, number> = {
 
 const INDUSTRIES = Object.keys(INDUSTRY_CVR);
 
-const PACKAGES = [
-  {
-    name: "Silver",
-    price: 799,
-    ctr: CTR_TOP3,
-    volumeMultiplier: 1,
-    positionLabel: "Top 3",
-    color: "#8B9AAD",
-    colorDim: "rgba(139,154,173,0.08)",
-    featured: false,
-  },
-  {
-    name: "Gold",
-    price: 1299,
-    ctr: CTR_TOP1,
-    volumeMultiplier: 1,
-    positionLabel: "Rank #1",
-    color: "var(--purple)",
-    colorDim: "rgba(31,120,255,0.12)",
-    featured: true,
-  },
-  {
-    name: "Platinum",
-    price: 1999,
-    ctr: CTR_TOP1,
-    volumeMultiplier: 2.5,
-    positionLabel: "#1 · 3 keywords",
-    color: "#38bdf8",
-    colorDim: "rgba(56,189,248,0.08)",
-    featured: false,
-  },
-] as const;
-
 interface Props {
+  rankedKeywords: RankedKeyword[];
+  opportunityKeywords: OpportunityKeyword[];
   city?: string;
 }
 
@@ -78,42 +34,75 @@ function fmtMoney(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export default function RevenueCalculator({ city }: Props) {
+function KwChip({ keyword, volume }: { keyword: string; volume: number }) {
+  return (
+    <span style={{
+      fontFamily: "var(--font-mono)",
+      fontSize: "0.63rem",
+      color: "var(--text-dim)",
+      background: "var(--card-hover)",
+      border: "1px solid var(--border)",
+      borderRadius: 4,
+      padding: "2px 8px",
+      whiteSpace: "nowrap",
+    }}>
+      {keyword} <span style={{ opacity: 0.55 }}>· {fmt(volume)}/mo</span>
+    </span>
+  );
+}
+
+export default function RevenueCalculator({ rankedKeywords, opportunityKeywords, city }: Props) {
   const [industry, setIndustry] = useState("Local Services");
   const [ticketSize, setTicketSize] = useState(3000);
   const [closeRate, setCloseRate] = useState(20);
 
-  const [kwData, setKwData] = useState<KeywordResearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState(false);
-  const fetchedFor = useRef<string>("");
-
-  useEffect(() => {
-    if (!city) return;
-    const key = `${industry}::${city}`;
-    if (fetchedFor.current === key) return;
-    fetchedFor.current = key;
-
-    setLoading(true);
-    setFetchError(false);
-    setKwData(null);
-    fetch("/api/keywords", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ industry, city }),
-    })
-      .then((r) => r.json())
-      .then((data: KeywordResearchResponse) => {
-        if (data.totalVolume > 0) setKwData(data);
-        else setFetchError(true);
-      })
-      .catch(() => setFetchError(true))
-      .finally(() => setLoading(false));
-  }, [industry, city]);
-
   const cvr = INDUSTRY_CVR[industry] ?? 0.025;
-  const baseVolume = kwData?.totalVolume ?? FALLBACK_VOLUME[industry] ?? 2400;
-  const usingLiveData = !!kwData;
+
+  // Volumes derived from actual audit keyword data
+  const rankedVolume = rankedKeywords.reduce((s, k) => s + k.search_volume, 0);
+  const opportunityVolume = opportunityKeywords.reduce((s, k) => s + k.search_volume, 0);
+  const combinedVolume = rankedVolume + opportunityVolume;
+
+  const hasData = rankedVolume > 0 || opportunityVolume > 0;
+
+  const PACKAGES = [
+    {
+      name: "Silver",
+      price: 799,
+      baseVolume: rankedVolume,
+      ctr: CTR_TOP3,
+      positionLabel: "Current kws → Top 3",
+      description: `Top 3 on ${rankedKeywords.length} ranking keywords`,
+      keywords: rankedKeywords.slice(0, 5),
+      color: "#8B9AAD",
+      colorDim: "rgba(139,154,173,0.08)",
+      featured: false,
+    },
+    {
+      name: "Gold",
+      price: 1299,
+      baseVolume: opportunityVolume,
+      ctr: CTR_TOP1,
+      positionLabel: "Opportunity kws → #1",
+      description: `Rank #1 on ${opportunityKeywords.length} opportunity keywords`,
+      keywords: opportunityKeywords.slice(0, 5),
+      color: "var(--purple)",
+      colorDim: "rgba(31,120,255,0.12)",
+      featured: true,
+    },
+    {
+      name: "Platinum",
+      price: 1999,
+      baseVolume: combinedVolume,
+      ctr: CTR_TOP1,
+      positionLabel: "Full domination",
+      description: `#1 across all ${rankedKeywords.length + opportunityKeywords.length} keywords`,
+      keywords: [...rankedKeywords, ...opportunityKeywords].slice(0, 5),
+      color: "#38bdf8",
+      colorDim: "rgba(56,189,248,0.08)",
+      featured: false,
+    },
+  ] as const;
 
   const inputStyle: React.CSSProperties = {
     background: "var(--card)",
@@ -151,57 +140,13 @@ export default function RevenueCalculator({ city }: Props) {
 
       {/* Data source status */}
       <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        {loading ? (
-          <>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--purple)", display: "inline-block", opacity: 0.6, animation: "pulse 1.2s ease-in-out infinite" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)" }}>
-              Fetching top {industry} keywords in {city}…
-            </span>
-          </>
-        ) : usingLiveData ? (
-          <>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--seo)", display: "inline-block" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)" }}>
-              Live data — top {kwData!.keywords.length} most-searched {industry} keywords in {kwData!.city} ·{" "}
-              <strong style={{ color: "var(--text)" }}>{fmt(baseVolume)} combined searches/mo</strong>
-            </span>
-          </>
-        ) : (
-          <>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--text-muted)", display: "inline-block" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)" }}>
-              {city
-                ? fetchError
-                  ? "Could not fetch live data — using industry benchmarks"
-                  : `Looking up ${industry} keywords in ${city}…`
-                : "Add a city above for live keyword volumes — showing industry benchmarks"}
-            </span>
-          </>
-        )}
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: hasData ? "var(--seo)" : "var(--text-muted)", display: "inline-block", flexShrink: 0 }} />
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)" }}>
+          {hasData
+            ? <>Live data — <strong style={{ color: "var(--text)" }}>{fmt(rankedVolume)}</strong> ranked searches/mo · <strong style={{ color: "var(--text)" }}>{fmt(opportunityVolume)}</strong> opportunity searches/mo{city ? ` in ${city}` : ""}</>
+            : "No keyword data available — run the audit to see projections"}
+        </span>
       </div>
-
-      {/* Keyword chips — read-only, shows what we're projecting against */}
-      {usingLiveData && kwData!.keywords.length > 0 && (
-        <div style={{ marginBottom: "1.5rem", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-          {kwData!.keywords.map((kw, i) => (
-            <span
-              key={i}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.63rem",
-                color: "var(--text-dim)",
-                background: "var(--card-hover)",
-                border: "1px solid var(--border)",
-                borderRadius: 4,
-                padding: "2px 8px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {kw.keyword} <span style={{ opacity: 0.55 }}>· {fmt(kw.search_volume)}/mo</span>
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Inputs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.875rem", marginBottom: "1.75rem" }}>
@@ -230,8 +175,7 @@ export default function RevenueCalculator({ city }: Props) {
       {/* Plan cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }} className="calculator-grid">
         {PACKAGES.map((pkg) => {
-          const vol = baseVolume * pkg.volumeMultiplier;
-          const visitors = Math.round(vol * pkg.ctr);
+          const visitors = Math.round(pkg.baseVolume * pkg.ctr);
           const leads = visitors * cvr;
           const clients = leads * (closeRate / 100);
           const monthlyRev = clients * ticketSize;
@@ -246,7 +190,7 @@ export default function RevenueCalculator({ city }: Props) {
                 border: `1px solid ${pkg.featured ? pkg.color : "var(--border)"}`,
                 borderRadius: 10,
                 padding: "1.1rem 1rem",
-                background: pkg.featured ? (pkg.colorDim as string) : "var(--card)",
+                background: pkg.featured ? pkg.colorDim : "var(--card)",
                 position: "relative",
                 display: "flex",
                 flexDirection: "column",
@@ -270,6 +214,15 @@ export default function RevenueCalculator({ city }: Props) {
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.63rem", color: pkg.color, background: `${pkg.color}18`, border: `1px solid ${pkg.color}44`, borderRadius: 4, padding: "2px 7px", display: "inline-block", alignSelf: "flex-start" }}>
                 {pkg.positionLabel}
               </div>
+
+              {/* Top keywords for this plan */}
+              {pkg.keywords.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                  {pkg.keywords.map((k, i) => (
+                    <KwChip key={i} keyword={k.keyword} volume={k.search_volume} />
+                  ))}
+                </div>
+              )}
 
               <div style={{ borderTop: "1px solid var(--border)" }} />
 
@@ -295,10 +248,9 @@ export default function RevenueCalculator({ city }: Props) {
       </div>
 
       <p style={{ marginTop: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-        {usingLiveData
-          ? `Based on ${fmt(baseVolume)} combined monthly searches across the top ${kwData!.keywords.length} most-searched ${industry} keywords in ${kwData!.city}.`
-          : "Based on industry-average search volume benchmarks."}{" "}
-        Projections use industry-average CTR by ranking position. Actual results vary.
+        Based on actual keyword data from this audit.
+        Silver uses {fmt(rankedVolume)} ranked searches · Gold uses {fmt(opportunityVolume)} opportunity searches · Platinum uses {fmt(combinedVolume)} combined.
+        CTR benchmarks: Top 3 = {(CTR_TOP3 * 100).toFixed(0)}%, Rank #1 = {(CTR_TOP1 * 100).toFixed(0)}%. Actual results vary.
       </p>
     </div>
   );

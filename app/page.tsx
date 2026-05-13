@@ -381,7 +381,11 @@ export default function Home() {
 
           {/* Revenue calculator — web-only sales tool */}
           {showAnalysis && !isRunning && (
-            <RevenueCalculator city={city || undefined} />
+            <RevenueCalculator
+              rankedKeywords={rankedKeywords}
+              opportunityKeywords={opportunityKeywords}
+              city={city || undefined}
+            />
           )}
 
           {/* PDF download — only shown when full report is ready */}
