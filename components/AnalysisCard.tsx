@@ -7,13 +7,13 @@ interface AnalysisCardProps {
 
 interface AnalysisSection {
   seo: string;
-  ai: string;
+  competition: string;
   recommendation: string;
 }
 
 const BULLETS: { key: keyof AnalysisSection; label: string; color: string; icon: string }[] = [
   { key: "seo", label: "SEO Authority", color: "var(--seo)", icon: "📈" },
-  { key: "ai", label: "AI Visibility", color: "var(--ai)", icon: "🤖" },
+  { key: "competition", label: "Competition", color: "var(--ai)", icon: "🏁" },
   { key: "recommendation", label: "Recommendation", color: "var(--purple)", icon: "🎯" },
 ];
 
@@ -21,8 +21,11 @@ export default function AnalysisCard({ text, pills }: AnalysisCardProps) {
   let structured: AnalysisSection | null = null;
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    if (parsed && typeof parsed.seo === "string" && typeof parsed.ai === "string") {
-      structured = parsed as unknown as AnalysisSection;
+    if (parsed && typeof parsed.seo === "string" && (typeof parsed.competition === "string" || typeof parsed.ai === "string")) {
+      const p = parsed as Record<string, unknown>;
+      // support both old "ai" key and new "competition" key
+      if (!p.competition && p.ai) p.competition = p.ai;
+      structured = p as unknown as AnalysisSection;
     }
   } catch {
     // fall through to plain text

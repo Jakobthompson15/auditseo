@@ -4,37 +4,44 @@ import { useCallback, useState } from "react";
 import type {
   AuditContext,
   AuditStep,
+  DomainRankOverview,
   RankedKeyword,
-  OpportunityKeyword,
-  ContentMention,
+  KeywordForSite,
+  SerpCompetitor,
+  IntersectionKeyword,
   StepStatus,
 } from "@/lib/types";
 import {
   computeSEOScore,
-  computeBrandScore,
   sanitizeDomain,
   summaryPills,
 } from "@/lib/audit";
 import DomainInput from "@/components/DomainInput";
 import ProgressTracker from "@/components/ProgressTracker";
 import ScoreCard from "@/components/ScoreCard";
+import DomainRankOverviewSection from "@/components/DomainRankOverviewSection";
 import RankedKeywordsSection from "@/components/RankedKeywordsSection";
-import OpportunityKeywordsSection from "@/components/OpportunityKeywordsSection";
-import MentionsSection from "@/components/MentionsSection";
+import KeywordsForSiteSection from "@/components/KeywordsForSiteSection";
+import SerpCompetitorsSection from "@/components/SerpCompetitorsSection";
+import DomainIntersectionSection from "@/components/DomainIntersectionSection";
 import AnalysisCard from "@/components/AnalysisCard";
 import RevenueCalculator from "@/components/RevenueCalculator";
 
 const STEP_LABELS: Record<AuditStep, string> = {
+  domain_rank_overview: "Domain overview",
   ranked_keywords: "Ranking keywords",
-  opportunity_keywords: "Keyword opportunities",
-  content_analysis: "Brand mentions",
+  keywords_for_site: "Keyword opportunities",
+  serp_competitors: "Competitor analysis",
+  domain_intersection: "Keyword gaps",
   analysis: "Generating analysis",
 };
 
 const ALL_STEPS: AuditStep[] = [
+  "domain_rank_overview",
   "ranked_keywords",
-  "opportunity_keywords",
-  "content_analysis",
+  "keywords_for_site",
+  "serp_competitors",
+  "domain_intersection",
   "analysis",
 ];
 
@@ -100,14 +107,20 @@ export default function Home() {
           const data = json.data;
           if (data !== undefined) {
             switch (step) {
+              case "domain_rank_overview":
+                context.domain_rank_overview = data as DomainRankOverview;
+                break;
               case "ranked_keywords":
                 context.ranked_keywords = data as RankedKeyword[];
                 break;
-              case "opportunity_keywords":
-                context.opportunity_keywords = data as OpportunityKeyword[];
+              case "keywords_for_site":
+                context.keywords_for_site = data as KeywordForSite[];
                 break;
-              case "content_analysis":
-                context.content_analysis = data as ContentMention[];
+              case "serp_competitors":
+                context.serp_competitors = data as SerpCompetitor[];
+                break;
+              case "domain_intersection":
+                context.domain_intersection = data as IntersectionKeyword[];
                 break;
               case "analysis":
                 context.analysis = data as string;
@@ -137,7 +150,7 @@ export default function Home() {
     setAuditData({});
     setSteps(makeInitialSteps());
     setHasRun(true);
-    void runFrom("ranked_keywords", domain, city, {});
+    void runFrom("domain_rank_overview", domain, city, {});
   }, [rawDomain, city, runFrom]);
 
   const handleRetry = useCallback(
@@ -156,21 +169,23 @@ export default function Home() {
   );
 
   // Derived display values
+  const overview = auditData.domain_rank_overview;
   const rankedKeywords = auditData.ranked_keywords ?? [];
-  const opportunityKeywords = auditData.opportunity_keywords ?? [];
-  const mentions = auditData.content_analysis ?? [];
+  const keywordsForSite = auditData.keywords_for_site ?? [];
+  const serpCompetitors = auditData.serp_competitors ?? [];
+  const domainIntersection = auditData.domain_intersection ?? [];
   const analysis = auditData.analysis ?? "";
 
-  const seoScore = auditData.ranked_keywords ? computeSEOScore(rankedKeywords) : 0;
-  const brandScore = auditData.content_analysis ? computeBrandScore(mentions) : 0;
-  const pills = auditData.ranked_keywords ? summaryPills(rankedKeywords, mentions) : [];
+  const seoScore = overview ? computeSEOScore(overview) : 0;
+  const pills = auditData.ranked_keywords ? summaryPills(rankedKeywords) : [];
 
   const stepDone = (id: AuditStep) => steps.find(s => s.id === id)?.status === "done";
 
-  const showScores = stepDone("ranked_keywords");
+  const showOverview = stepDone("domain_rank_overview");
   const showRanked = stepDone("ranked_keywords");
-  const showOpportunity = stepDone("opportunity_keywords");
-  const showMentions = stepDone("content_analysis");
+  const showKeywordsForSite = stepDone("keywords_for_site");
+  const showCompetitors = stepDone("serp_competitors");
+  const showIntersection = stepDone("domain_intersection");
   const showAnalysis = !!analysis;
 
   const auditing = isRunning || hasRun;
@@ -271,7 +286,7 @@ export default function Home() {
               textTransform: "uppercase",
             }}
           >
-            SEO + AI Visibility
+            SEO Intelligence
           </span>
         </div>
 
@@ -297,8 +312,8 @@ export default function Home() {
             lineHeight: 1.6,
           }}
         >
-          Combined SEO authority and AI/LLM brand presence report — powered by
-          DataForSEO and Claude.
+          Organic rankings, keyword opportunities, competitor analysis, and
+          revenue projections — powered by DataForSEO and Claude.
         </p>
       </div>
 
@@ -345,8 +360,8 @@ export default function Home() {
       {/* Report */}
       {auditing && (
         <div style={{ marginTop: "2rem" }} id="audit-report">
-          {/* Score cards */}
-          {showScores && (
+          {/* Score card */}
+          {showOverview && overview && (
             <div className="scores-row" style={{ display: "flex", gap: "1rem", marginBottom: "0" }}>
               <ScoreCard
                 label="SEO Score"
@@ -355,24 +370,28 @@ export default function Home() {
                 accentDim="rgba(97,206,112,0.15)"
                 sublabel="Search Presence"
               />
-              <ScoreCard
-                label="Brand Score"
-                score={brandScore}
-                accent="var(--ai)"
-                accentDim="rgba(31,120,255,0.15)"
-                sublabel="Web Mentions"
-              />
             </div>
           )}
+
+          {/* Domain overview */}
+          {showOverview && overview && <DomainRankOverviewSection overview={overview} />}
 
           {/* Ranking keywords */}
           {showRanked && <RankedKeywordsSection keywords={rankedKeywords} />}
 
-          {/* Opportunity keywords */}
-          {showOpportunity && <OpportunityKeywordsSection keywords={opportunityKeywords} />}
+          {/* Keyword opportunities */}
+          {showKeywordsForSite && <KeywordsForSiteSection keywords={keywordsForSite} />}
 
-          {/* Brand mentions */}
-          {showMentions && <MentionsSection mentions={mentions} />}
+          {/* Competitors */}
+          {showCompetitors && <SerpCompetitorsSection competitors={serpCompetitors} />}
+
+          {/* Keyword intersection */}
+          {showIntersection && domainIntersection.length > 0 && (
+            <DomainIntersectionSection
+              keywords={domainIntersection}
+              competitor={serpCompetitors[0]?.domain ?? ""}
+            />
+          )}
 
           {/* Analysis */}
           {showAnalysis && (
@@ -383,7 +402,7 @@ export default function Home() {
           {showAnalysis && !isRunning && (
             <RevenueCalculator
               rankedKeywords={rankedKeywords}
-              opportunityKeywords={opportunityKeywords}
+              keywordsForSite={keywordsForSite}
               city={city || undefined}
             />
           )}

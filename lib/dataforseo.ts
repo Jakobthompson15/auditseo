@@ -144,13 +144,23 @@ export async function resolveLocationCode(
     });
   }
 
-  if (!match) return DEFAULT;
+  if (!match) {
+    console.log(`[resolveLocationCode] no match for "${input}", falling back to US (2840)`);
+    return DEFAULT;
+  }
 
-  // If caller wants city-level, return the matched code directly
-  if (cityLevel) return match.location_code;
+  console.log(`[resolveLocationCode] "${input}" → ${match.location_name} (${match.location_code}, type=${match.location_type})`);
 
-  // Otherwise return the country-level code for the matched location
-  // (Labs competitive analysis works best at country level)
+  // If caller wants city-level, return the most specific code available.
+  // If match is already country-level, try to find a state/region match first.
+  if (cityLevel) {
+    // If we matched a city or region, return it directly
+    if (match.location_type !== "Country") return match.location_code;
+    // If we only matched the country, still return it (best we have)
+    return match.location_code;
+  }
+
+  // Country-level mode: walk up to the country entry
   if (match.location_type === "Country") return match.location_code;
 
   const countryEntry = locations.find(
