@@ -3,25 +3,39 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   AuditRequest,
   AuditStep,
-  AIMetrics,
-  AIKeywordItem,
-  KeywordOpportunity,
-  CompetitorDomain,
+  RankedKeyword,
+  OpportunityKeyword,
+  ContentMention,
   AuditContext,
 } from "@/lib/types";
 import { dfsPost, resolveLocationCode } from "@/lib/dataforseo";
+import { seedFromDomain } from "@/lib/audit";
 
 // ── Analysis prompt ────────────────────────────────────────────────────────
 function analysisPrompt(domain: string, context: Partial<AuditContext>): string {
-  return `You are a senior digital marketing analyst. Here is the full audit data for "${domain}":
+  const rankedCount = context.ranked_keywords?.length ?? 0;
+  const topKeywords = (context.ranked_keywords ?? [])
+    .slice(0, 5)
+    .map(k => `${k.keyword} (pos ${k.rank_position}, vol ${k.search_volume})`)
+    .join(", ");
+  const oppCount = context.opportunity_keywords?.length ?? 0;
+  const topOpps = (context.opportunity_keywords ?? [])
+    .slice(0, 5)
+    .map(k => `${k.keyword} (vol ${k.search_volume}, ${k.intent})`)
+    .join(", ");
+  const mentionCount = context.content_analysis?.length ?? 0;
 
-${JSON.stringify(context, null, 2)}
+  return `You are a senior digital marketing analyst reviewing "${domain}".
+
+Ranking data: ${rankedCount} keywords found. Top keywords: ${topKeywords || "none"}
+Opportunity keywords: ${oppCount} found. Top opportunities: ${topOpps || "none"}
+Brand mentions: ${mentionCount} mentions found across the web.
 
 Return ONLY a valid JSON object with exactly these 3 fields (1-2 sentences each, no markdown):
 {
-  "seo": "<assess organic search presence — cite top keyword opportunities, search volume, difficulty, and any quick-win positions 11-20>",
-  "ai": "<evaluate AI/LLM visibility — cite total mentions, AI search volume, answer vs question ratio>",
-  "recommendation": "<one concrete strategic recommendation based on the keyword gaps and AI visibility data for this specific domain>"
+  "seo": "<assess current organic search presence — cite specific keywords, positions, and search volume>",
+  "ai": "<evaluate brand visibility and mention presence across the web — cite mention count and sentiment>",
+  "recommendation": "<one concrete action this business should take to improve search visibility and brand presence>"
 }
 No markdown, no explanation — only the JSON object.`;
 }
@@ -46,195 +60,173 @@ export async function POST(req: NextRequest) {
   }
 
   const { domain, step, context = {} } = body;
+  const city = body.city ?? "";
 
   if (!domain || typeof domain !== "string") {
     return NextResponse.json({ error: "Missing or invalid domain" }, { status: 400 });
   }
 
-  const validSteps: AuditStep[] = ["ai_metrics", "ai_keywords", "keywords", "competitors", "analysis"];
+  const validSteps: AuditStep[] = ["ranked_keywords", "opportunity_keywords", "content_analysis", "analysis"];
   if (!validSteps.includes(step)) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
 
   console.log(`[audit] domain=${domain} step=${step}`);
 
-  const city = body.city ?? "";
-
   try {
-    let data: AIMetrics | AIKeywordItem[] | KeywordOpportunity[] | CompetitorDomain[] | string;
+    let data: RankedKeyword[] | OpportunityKeyword[] | ContentMention[] | string;
 
     switch (step) {
-      // ── STEP 1: AI mention metrics ────────────────────────────────────
-      case "ai_metrics": {
-        type AIMetricsResult = Array<{
-          total_mentions?: number;
-          ai_search_volume?: number;
-          question_mentions?: number;
-          answer_mentions?: number;
+      // ── STEP 1: Keywords the domain already ranks for ─────────────────
+      case "ranked_keywords": {
+        type RankedResult = Array<{
+          items?: Array<Record<string, unknown>>;
         }>;
 
-        let r: AIMetricsResult[0] = {};
-        try {
-          const result = await dfsPost<AIMetricsResult>(
-            "/v3/ai_optimization/llm_mentions/aggregated_metrics/live",
-            [{ target: [{ domain }] }]
-          );
-          r = result[0] ?? {};
-        } catch (err) {
-          console.warn("[ai_metrics] failed:", err instanceof Error ? err.message : err);
+        const locationCode = await resolveLocationCode(city);
+        const result = await dfsPost<RankedResult>(
+          "/v3/dataforseo_labs/google/ranked_keywords/live",
+          [{
+            target: domain,
+            location_code: locationCode,
+            language_code: "en",
+            limit: 50,
+          }]
+        );
+
+        const items = result[0]?.items ?? [];
+        if (items.length > 0) {
+          console.log("[ranked_keywords] first item keys:", Object.keys(items[0]));
+          console.log("[ranked_keywords] first item:", JSON.stringify(items[0]).slice(0, 500));
         }
 
-        data = {
-          total_mentions: r.total_mentions ?? 0,
-          ai_search_volume: r.ai_search_volume ?? 0,
-          question_mentions: r.question_mentions ?? 0,
-          answer_mentions: r.answer_mentions ?? 0,
-        } satisfies AIMetrics;
-        console.log(`[ai_metrics] mentions=${(data as AIMetrics).total_mentions} vol=${(data as AIMetrics).ai_search_volume}`);
-        break;
-      }
-
-      // ── STEP 2: AI mention queries ────────────────────────────────────
-      case "ai_keywords": {
-        type AIKwResult = Array<{
-          items?: Array<{
-            keyword?: string;
-            total_count?: number;
-            ai_search_volume?: number;
-          }>;
-        }>;
-
-        let items: NonNullable<AIKwResult[0]["items"]> = [];
-        try {
-          const result = await dfsPost<AIKwResult>(
-            "/v3/ai_optimization/llm_mentions/search/live",
-            [{ target: [{ domain }], limit: 20 }]
-          );
-          items = (result[0]?.items ?? [])
-            .sort((a, b) => (b.total_count ?? 0) - (a.total_count ?? 0))
-            .slice(0, 6);
-        } catch (err) {
-          console.warn("[ai_keywords] failed:", err instanceof Error ? err.message : err);
-        }
-
-        data = items.map(k => ({
-          keyword: k.keyword ?? "",
-          total_count: k.total_count ?? 0,
-          ai_search_volume: k.ai_search_volume ?? 0,
-        })) satisfies AIKeywordItem[];
-        console.log(`[ai_keywords] queries=${items.length}`);
-        break;
-      }
-
-      // ── STEP 3: SERP keyword opportunities (Labs) ────────────────────
-      case "keywords": {
-        type KwForSiteResult = Array<{
-          items?: Array<{
-            keyword_data?: {
-              keyword?: string;
-              keyword_info?: { search_volume?: number; cpc?: number };
-              keyword_properties?: { keyword_difficulty?: number };
-              search_intent_info?: { main_intent?: string };
-            };
-            ranked_serp_element?: { serp_item?: { rank_group?: number } };
-          }>;
-        }>;
-
-        let items: NonNullable<KwForSiteResult[0]["items"]> = [];
-        try {
-          const locationCode = await resolveLocationCode(city);
-          const result = await dfsPost<KwForSiteResult>(
-            "/v3/dataforseo_labs/google/keywords_for_site/live",
-            [{
-              target: domain,
-              location_code: locationCode,
-              language_code: "en",
-              include_serp_info: true,
-              include_subdomains: true,
-              limit: 50,
-            }]
-          );
-          items = result[0]?.items ?? [];
-          if (items.length > 0) console.log("[keywords] first item:", JSON.stringify(items[0]));
-        } catch (err) {
-          console.warn("[keywords] failed:", err instanceof Error ? err.message : err);
-        }
-
-        // Compute opportunity scores and sort
-        const scored = items.map(item => {
-          const kd = item.keyword_data ?? {};
-          const info = kd.keyword_info ?? {};
-          const vol = info.search_volume ?? 0;
-          const cpc = info.cpc ?? 0;
-          const diff = kd.keyword_properties?.keyword_difficulty ?? 50;
-          const intent = kd.search_intent_info?.main_intent ?? "informational";
-          const pos = item.ranked_serp_element?.serp_item?.rank_group;
-
-          let score = vol / (diff + 1);
-          if (intent === "commercial" || intent === "transactional") score *= 1.5;
-          if (pos !== undefined && pos >= 11 && pos <= 20) score *= 2;
-          else if (pos !== undefined && pos >= 21 && pos <= 50) score *= 1.5;
+        data = items.map(item => {
+          const kd = (item.keyword_data ?? {}) as Record<string, unknown>;
+          const info = (kd.keyword_info ?? {}) as Record<string, unknown>;
+          const props = (kd.keyword_properties ?? {}) as Record<string, unknown>;
+          const intent = (kd.search_intent_info ?? {}) as Record<string, unknown>;
+          const serp = (item.ranked_serp_element ?? {}) as Record<string, unknown>;
+          const serpItem = ((serp.serp_item ?? {}) as Record<string, unknown>);
 
           return {
-            keyword: kd.keyword ?? "",
-            search_volume: vol,
-            cpc,
-            keyword_difficulty: diff,
-            intent,
-            opportunity_score: Math.round(score),
-            rank_position: pos,
-          } satisfies KeywordOpportunity;
-        });
+            keyword: (kd.keyword as string) ?? "",
+            search_volume: (info.search_volume as number) ?? 0,
+            rank_position: (serpItem.rank_group as number) ?? 0,
+            cpc: (info.cpc as number) ?? 0,
+            intent: (intent.main_intent as string) ?? "informational",
+          } satisfies RankedKeyword;
+        }).filter(k => k.keyword !== "")
+          .sort((a, b) => b.search_volume - a.search_volume)
+          .slice(0, 20);
 
-        scored.sort((a, b) => b.opportunity_score - a.opportunity_score);
-        data = scored.slice(0, 12);
-        console.log(`[keywords] total=${items.length} returned=${(data as KeywordOpportunity[]).length}`);
+        console.log(`[ranked_keywords] total=${items.length} returned=${(data as RankedKeyword[]).length}`);
         break;
       }
 
-      // ── STEP 4: Competitor domains (Labs) ────────────────────────────
-      case "competitors": {
-        type CompetitorsResult = Array<{
-          items?: Array<{
-            domain?: string;
-            avg_position?: number;
-            sum_position?: number;
-            intersections?: number;
-            full_domain_metrics?: {
-              organic?: { etv?: number; keywords_count?: number };
-            };
-          }>;
+      // ── STEP 2: Opportunity keywords the domain should rank for ───────
+      case "opportunity_keywords": {
+        type SuggestResult = Array<{
+          items?: Array<Record<string, unknown>>;
         }>;
 
-        let items: NonNullable<CompetitorsResult[0]["items"]> = [];
+        // Use top ranked keyword as seed, fall back to domain-derived seed
+        const topRanked = context.ranked_keywords?.[0]?.keyword;
+        const seed = topRanked ?? seedFromDomain(domain);
+        console.log(`[opportunity_keywords] seed="${seed}"`);
+
+        const locationCode = await resolveLocationCode(city);
+        const result = await dfsPost<SuggestResult>(
+          "/v3/dataforseo_labs/google/keyword_suggestions/live",
+          [{
+            keyword: seed,
+            location_code: locationCode,
+            language_code: "en",
+            limit: 30,
+            include_serp_info: false,
+          }]
+        );
+
+        const items = result[0]?.items ?? [];
+        if (items.length > 0) {
+          console.log("[opportunity_keywords] first item:", JSON.stringify(items[0]).slice(0, 500));
+        }
+
+        // Filter out keywords the domain already ranks well for
+        const alreadyRanking = new Set(
+          (context.ranked_keywords ?? [])
+            .filter(k => k.rank_position <= 10)
+            .map(k => k.keyword.toLowerCase())
+        );
+
+        data = items.map(item => {
+          const kd = (item.keyword_data ?? {}) as Record<string, unknown>;
+          const info = (kd.keyword_info ?? {}) as Record<string, unknown>;
+          const intent = (kd.search_intent_info ?? {}) as Record<string, unknown>;
+
+          return {
+            keyword: (kd.keyword as string) ?? "",
+            search_volume: (info.search_volume as number) ?? 0,
+            cpc: (info.cpc as number) ?? 0,
+            intent: (intent.main_intent as string) ?? "informational",
+            competition: (info.competition as number) ?? 0,
+          } satisfies OpportunityKeyword;
+        }).filter(k => k.keyword !== "" && !alreadyRanking.has(k.keyword.toLowerCase()))
+          .sort((a, b) => b.search_volume - a.search_volume)
+          .slice(0, 15);
+
+        console.log(`[opportunity_keywords] total=${items.length} returned=${(data as OpportunityKeyword[]).length}`);
+        break;
+      }
+
+      // ── STEP 3: Brand/content mentions ───────────────────────────────
+      case "content_analysis": {
+        type MentionResult = Array<{
+          items?: Array<Record<string, unknown>>;
+        }>;
+
+        let items: Array<Record<string, unknown>> = [];
         try {
-          const locationCode = await resolveLocationCode(city);
-          const result = await dfsPost<CompetitorsResult>(
-            "/v3/dataforseo_labs/google/competitors_domain/live",
+          const result = await dfsPost<MentionResult>(
+            "/v3/content_analysis/search/live",
             [{
-              target: domain,
-              location_code: locationCode,
-              language_code: "en",
-              limit: 8,
+              keyword: domain,
+              limit: 10,
             }]
           );
           items = result[0]?.items ?? [];
+          if (items.length > 0) {
+            console.log("[content_analysis] first item:", JSON.stringify(items[0]).slice(0, 500));
+          }
         } catch (err) {
-          console.warn("[competitors] failed:", err instanceof Error ? err.message : err);
+          console.warn("[content_analysis] failed:", err instanceof Error ? err.message : err);
         }
 
-        data = items.map(c => ({
-          domain: c.domain ?? "",
-          avg_position: Math.round((c.avg_position ?? 0) * 10) / 10,
-          intersections: c.intersections ?? 0,
-          etv: c.full_domain_metrics?.organic?.etv ?? 0,
-          keywords_count: c.full_domain_metrics?.organic?.keywords_count ?? 0,
-        })) satisfies CompetitorDomain[];
-        console.log(`[competitors] count=${(data as CompetitorDomain[]).length}`);
+        data = items.map(item => {
+          const sentimentRaw = (item.sentiment_connotations ?? {}) as Record<string, number>;
+          const pos = sentimentRaw.positive ?? 0;
+          const neg = sentimentRaw.negative ?? 0;
+          const sentiment: ContentMention["sentiment"] =
+            pos > neg + 0.2 ? "positive" : neg > pos + 0.2 ? "negative" : "neutral";
+
+          const textStructure = (item.text_structure ?? {}) as Record<string, unknown>;
+          const snippets = textStructure.snippets as string[] | undefined;
+          const snippet = snippets?.[0] ?? "";
+
+          return {
+            title: (item.title as string) ?? "",
+            url: (item.url as string) ?? "",
+            domain: (item.main_domain as string) ?? "",
+            date: ((item.date_published as string) ?? "").slice(0, 10),
+            snippet: snippet.slice(0, 200),
+            sentiment,
+          } satisfies ContentMention;
+        }).filter(m => m.url !== "");
+
+        console.log(`[content_analysis] mentions=${(data as ContentMention[]).length}`);
         break;
       }
 
-      // ── STEP 5: Analysis (Claude) ─────────────────────────────────────
+      // ── STEP 4: Claude analysis ───────────────────────────────────────
       case "analysis": {
         console.log(`[analysis] calling Claude for ${domain}`);
         const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

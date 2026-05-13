@@ -1,41 +1,38 @@
-export interface AIMetrics {
-  total_mentions: number;
-  ai_search_volume: number;
-  question_mentions: number;
-  answer_mentions: number;
-}
-
-export interface AIKeywordItem {
+export interface RankedKeyword {
   keyword: string;
-  total_count: number;
-  ai_search_volume: number;
+  search_volume: number;
+  rank_position: number;
+  cpc: number;
+  intent: string;
 }
 
-export interface KeywordOpportunity {
+export interface OpportunityKeyword {
   keyword: string;
   search_volume: number;
   cpc: number;
-  keyword_difficulty: number;
   intent: string;
-  opportunity_score: number;
-  rank_position?: number;
+  competition: number;
 }
 
-export interface CompetitorDomain {
+export interface ContentMention {
+  title: string;
+  url: string;
   domain: string;
-  avg_position: number;
-  intersections: number;
-  etv: number;
-  keywords_count: number;
+  date: string;
+  snippet: string;
+  sentiment: "positive" | "negative" | "neutral";
 }
 
-export type AuditStep = "ai_metrics" | "ai_keywords" | "keywords" | "competitors" | "analysis";
+export type AuditStep =
+  | "ranked_keywords"
+  | "opportunity_keywords"
+  | "content_analysis"
+  | "analysis";
 
 export interface AuditContext {
-  ai_metrics: AIMetrics;
-  ai_keywords: AIKeywordItem[];
-  keywords: KeywordOpportunity[];
-  competitors: CompetitorDomain[];
+  ranked_keywords: RankedKeyword[];
+  opportunity_keywords: OpportunityKeyword[];
+  content_analysis: ContentMention[];
   analysis: string;
 }
 
@@ -48,7 +45,7 @@ export interface AuditRequest {
 
 export interface AuditResponse {
   step: AuditStep;
-  data: AIMetrics | AIKeywordItem[] | KeywordOpportunity[] | CompetitorDomain[] | string;
+  data: RankedKeyword[] | OpportunityKeyword[] | ContentMention[] | string;
   error?: string;
 }
 
