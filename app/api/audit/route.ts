@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
             }]
           );
           items = result[0]?.items ?? [];
+          if (items.length > 0) console.log("[keywords] first item:", JSON.stringify(items[0]));
         } catch (err) {
           console.warn("[keywords] failed:", err instanceof Error ? err.message : err);
         }
