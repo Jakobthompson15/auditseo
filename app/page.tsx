@@ -360,21 +360,21 @@ export default function Home() {
       {/* Report */}
       {auditing && (
         <div style={{ marginTop: "2rem" }} id="audit-report">
-          {/* Score card */}
-          {showOverview && overview && (
-            <div className="scores-row" style={{ display: "flex", gap: "1rem", marginBottom: "0" }}>
-              <ScoreCard
-                label="SEO Score"
-                score={seoScore}
-                accent="var(--seo)"
-                accentDim="rgba(97,206,112,0.15)"
-                sublabel="Search Presence"
-              />
-            </div>
+          {/* Score card + domain overview — only when API returned real data */}
+          {showOverview && overview && overview.organic_keywords > 0 && (
+            <>
+              <div className="scores-row" style={{ display: "flex", gap: "1rem", marginBottom: "0" }}>
+                <ScoreCard
+                  label="SEO Score"
+                  score={seoScore}
+                  accent="var(--seo)"
+                  accentDim="rgba(97,206,112,0.15)"
+                  sublabel="Search Presence"
+                />
+              </div>
+              <DomainRankOverviewSection overview={overview} />
+            </>
           )}
-
-          {/* Domain overview */}
-          {showOverview && overview && <DomainRankOverviewSection overview={overview} />}
 
           {/* Ranking keywords */}
           {showRanked && <RankedKeywordsSection keywords={rankedKeywords} />}

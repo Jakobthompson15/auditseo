@@ -87,40 +87,48 @@ export async function POST(req: NextRequest) {
     let data: DomainRankOverview | RankedKeyword[] | KeywordForSite[] | SerpCompetitor[] | IntersectionKeyword[] | string;
 
     switch (step) {
-      // ── STEP 1: Domain overview ────────────────────────────────────────
+      // ── STEP 1: Domain overview (optional — fails gracefully if not on account) ──
       case "domain_rank_overview": {
-        type OverviewResult = Array<{ items?: Array<Record<string, unknown>> }>;
-        const locationCode = await resolveLocationCode(city, true);
-        const result = await dfsPost<OverviewResult>(
-          "/v3/dataforseo_labs/google/domain_rank_overview/live",
-          [{ target: domain, location_code: locationCode, language_code: "en" }]
-        );
-        const item = (result[0]?.items?.[0] ?? {}) as Record<string, unknown>;
-        if (result[0]?.items?.length) {
-          console.log("[domain_rank_overview] item keys:", Object.keys(item));
-          console.log("[domain_rank_overview] item:", JSON.stringify(item).slice(0, 500));
+        const EMPTY_OVERVIEW: DomainRankOverview = {
+          organic_keywords: 0, organic_traffic: 0,
+          pos_1_3: 0, pos_4_10: 0, pos_11_20: 0, pos_21_100: 0,
+        };
+        try {
+          type OverviewResult = Array<{ items?: Array<Record<string, unknown>> }>;
+          const locationCode = await resolveLocationCode(city, true);
+          const result = await dfsPost<OverviewResult>(
+            "/v3/dataforseo_labs/google/domain_rank_overview/live",
+            [{ target: domain, location_code: locationCode, language_code: "en" }]
+          );
+          const item = (result[0]?.items?.[0] ?? {}) as Record<string, unknown>;
+          if (result[0]?.items?.length) {
+            console.log("[domain_rank_overview] item keys:", Object.keys(item));
+            console.log("[domain_rank_overview] item:", JSON.stringify(item).slice(0, 500));
+          }
+          const metrics = (item.metrics ?? {}) as Record<string, unknown>;
+          const organic = (metrics.organic ?? {}) as Record<string, unknown>;
+
+          data = {
+            organic_keywords: (organic.count as number) ?? 0,
+            organic_traffic: (organic.etv as number) ?? 0,
+            pos_1_3: ((organic.pos_1 as number) ?? 0) + ((organic.pos_2_3 as number) ?? 0),
+            pos_4_10: (organic.pos_4_10 as number) ?? 0,
+            pos_11_20: (organic.pos_11_20 as number) ?? 0,
+            pos_21_100:
+              ((organic.pos_21_30 as number) ?? 0) +
+              ((organic.pos_31_40 as number) ?? 0) +
+              ((organic.pos_41_50 as number) ?? 0) +
+              ((organic.pos_51_60 as number) ?? 0) +
+              ((organic.pos_61_70 as number) ?? 0) +
+              ((organic.pos_71_80 as number) ?? 0) +
+              ((organic.pos_81_90 as number) ?? 0) +
+              ((organic.pos_91_100 as number) ?? 0),
+          } satisfies DomainRankOverview;
+          console.log(`[domain_rank_overview] organic_keywords=${(data as DomainRankOverview).organic_keywords}`);
+        } catch (err) {
+          console.warn("[domain_rank_overview] skipped:", err instanceof Error ? err.message : err);
+          data = EMPTY_OVERVIEW;
         }
-        const metrics = (item.metrics ?? {}) as Record<string, unknown>;
-        const organic = (metrics.organic ?? {}) as Record<string, unknown>;
-
-        data = {
-          organic_keywords: (organic.count as number) ?? 0,
-          organic_traffic: (organic.etv as number) ?? 0,
-          pos_1_3: ((organic.pos_1 as number) ?? 0) + ((organic.pos_2_3 as number) ?? 0),
-          pos_4_10: (organic.pos_4_10 as number) ?? 0,
-          pos_11_20: (organic.pos_11_20 as number) ?? 0,
-          pos_21_100:
-            ((organic.pos_21_30 as number) ?? 0) +
-            ((organic.pos_31_40 as number) ?? 0) +
-            ((organic.pos_41_50 as number) ?? 0) +
-            ((organic.pos_51_60 as number) ?? 0) +
-            ((organic.pos_61_70 as number) ?? 0) +
-            ((organic.pos_71_80 as number) ?? 0) +
-            ((organic.pos_81_90 as number) ?? 0) +
-            ((organic.pos_91_100 as number) ?? 0),
-        } satisfies DomainRankOverview;
-
-        console.log(`[domain_rank_overview] organic_keywords=${(data as DomainRankOverview).organic_keywords}`);
         break;
       }
 
